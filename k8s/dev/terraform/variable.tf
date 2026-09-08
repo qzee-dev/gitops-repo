@@ -24,4 +24,8 @@ variable "app_namespace" {
   default = "myapp"
 
 
+variable "acm_certificate_arn" {
+  description = "ACM certificate ARN for Argo CD HTTPS ALB"
+  type        = string
+}
 
