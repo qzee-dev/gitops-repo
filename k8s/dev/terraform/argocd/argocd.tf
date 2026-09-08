@@ -13,7 +13,6 @@ resource "kubernetes_namespace" "argocd" {
   }
 }
 
-
 resource "helm_release" "argocd" {
   name       = "argocd"
   namespace  = kubernetes_namespace.argocd.metadata[0].name
@@ -21,13 +20,22 @@ resource "helm_release" "argocd" {
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argo-cd"
 
-  # Pin the chart version.
   version = var.argocd_chart_version
 
-  # Namespace is managed separately by Terraform.
   create_namespace = false
 
+  values = [
+    templatefile(
+      "${path.module}/argocd/values.yaml",
+      {
+        acm_certificate_arn = var.acm_certificate_arn
+      }
+    )
+  ]
+
   depends_on = [
-    kubernetes_namespace.argocd
+    kubernetes_namespace.argocd,
+    helm_release.aws_load_balancer_controller
   ]
 }
+
