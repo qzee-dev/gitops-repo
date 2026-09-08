@@ -1,1 +1,28 @@
+########################################
+#check after installing pod identity
+########################################
+i)kubectl get pods \
+  -n kube-system \
+  -l app.kubernetes.io/instance=eks-pod-identity-agent
+
+You should expect the Pod Identity Agent pods to be running on your nodes.
+For example:
+NAME                                      READY   STATUS    RESTARTS   AGE
+eks-pod-identity-agent-xxxxx              1/1     Running   0          2m
+eks-pod-identity-agent-yyyyy              1/1     Running   0          2m
+
+One important point
+Installing the Pod Identity Agent is only the first half of using EKS Pod Identity.
+
+Later, when you want an application such as Argo CD or your application workload to access AWS services (S3, ECR, Secrets Manager, SQS, etc.), you'll also need:
+
+For example, the Terraform resource you'll eventually use is:
+
+resource "aws_eks_pod_identity_association" "myapp" {
+  cluster_name    = var.cluster_name
+  namespace       = var.app_namespace
+  service_account = "myapp"
+  role_arn        = aws_iam_role.myapp.arn
+}
+########################################################################################
 
