@@ -8,7 +8,13 @@ variable "cluster_name" {
   default = "my-eks-cluster"
 }
 
+variable "argocd_chart_version" {
+  description = "Pinned Argo CD Helm chart version"
+  type        = string
+}
+
 variable "argocd_namespace" {
+  description = "Kubernetes namespace for Argo CD"
   type    = string
   default = "argocd"
 }
@@ -16,3 +22,6 @@ variable "argocd_namespace" {
 variable "app_namespace" {
   type    = string
   default = "myapp"
+
+
+
