@@ -24,5 +24,30 @@ resource "aws_eks_pod_identity_association" "myapp" {
   service_account = "myapp"
   role_arn        = aws_iam_role.myapp.arn
 }
-########################################################################################
+
+############################################################################
+#check after installing aws-loadbalancer-controller 
+############################################################################
+i)terraform apply
+
+ii)kubectl get deployment \
+  -n kube-system \
+  aws-load-balancer-controller
+
+You should see something similar to:
+NAME                           READY   UP-TO-DATE   AVAILABLE   AGE
+aws-load-balancer-controller   2/2     2            2           5m
+
+For a more useful check:
+
+kubectl get pods \
+  -n kube-system \
+  -l app.kubernetes.io/name=aws-load-balancer-controller
+
+And:
+kubectl describe deployment \
+  -n kube-system \
+  aws-load-balancer-controller
+
+
 
