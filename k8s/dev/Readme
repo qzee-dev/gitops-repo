@@ -48,6 +48,13 @@ And:
 kubectl describe deployment \
   -n kube-system \
   aws-load-balancer-controller
+################################################################
+#And the four AWS pieces in aws-load-balancer-controller.tf are:
+################################################################
 
-
+IAM Policy — what the controller is allowed to do.
+IAM Role — the identity the controller assumes.
+Policy Attachment — connects the policy to the role.
+EKS Pod Identity Association — connects the IAM role to the Kubernetes ServiceAccount.
+That's the complete chain you need for the controller.
 
