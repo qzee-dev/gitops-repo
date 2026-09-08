@@ -1,5 +1,5 @@
 ######################################
-#IAM Policy
+#IAM Permission  Policy
 ######################################
 resource "aws_iam_policy" "aws_load_balancer_controller" {
   name        = "${var.cluster_name}-AWSLoadBalancerControllerPolicy"
@@ -8,7 +8,7 @@ resource "aws_iam_policy" "aws_load_balancer_controller" {
   policy = file("${path.module}/iam-policy.json")
 }
 ######################################
-#IAM Role
+#IAM Role With Trust policy
 #####################################
 resource "aws_iam_role" "aws_load_balancer_controller" {
   name = "${var.cluster_name}-aws-load-balancer-controller"
