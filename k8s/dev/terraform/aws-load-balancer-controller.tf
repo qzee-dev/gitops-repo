@@ -1,6 +1,15 @@
 ######################################
 #IAM Policy
 ######################################
+resource "aws_iam_policy" "aws_load_balancer_controller" {
+  name        = "${var.cluster_name}-AWSLoadBalancerControllerPolicy"
+  description = "IAM policy for AWS Load Balancer Controller"
+
+  policy = file("${path.module}/iam-policy.json")
+}
+######################################
+#IAM Role
+#####################################
 resource "aws_iam_role" "aws_load_balancer_controller" {
   name = "${var.cluster_name}-aws-load-balancer-controller"
 
@@ -18,19 +27,24 @@ resource "aws_iam_role" "aws_load_balancer_controller" {
         Action = [
           "sts:AssumeRole",
           "sts:TagSession"
-        }
+        ]
       }
     ]
   })
-}
 
+  tags = {
+    Name      = "${var.cluster_name}-aws-load-balancer-controller"
+    ManagedBy = "Terraform"
+  }
+}
 ######################################
-#IAM Role
+#Attach IAM Policy to IAM Role
 #####################################
 
-
-
-
+resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
+  role       = aws_iam_role.aws_load_balancer_controller.name
+  policy_arn = aws_iam_policy.aws_load_balancer_controller.arn
+}
 
 #####################################
 # Pod Identity Association
