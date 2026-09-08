@@ -9,3 +9,13 @@ output "cluster_name" {
 output "cluster_endpoint" {
   value = data.aws_eks_cluster.this.endpoint
 }
+
+
+output "pod_identity_agent_status" {
+  value = aws_eks_addon.pod_identity_agent.status
+}
+
+output "pod_identity_agent_version" {
+  value = aws_eks_addon.pod_identity_agent.addon_version
+}
+
