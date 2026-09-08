@@ -28,7 +28,7 @@ server:
 
       alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
 
-      alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:eu-west-1:123456789012:certificate/xxxxxxxx"
+      alb.ingress.kubernetes.io/certificate-arn: "${acm_certificate_arn}"   #[no hardcoded]
 
       alb.ingress.kubernetes.io/ssl-redirect: "443"
 
