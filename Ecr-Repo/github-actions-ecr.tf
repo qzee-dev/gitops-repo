@@ -1,3 +1,24 @@
+
+locals {
+  github_service_repositories = {
+    auth = "myorg/myapp-auth"
+
+    users = "myorg/myapp-users"
+
+    orders = "myorg/myapp-orders"
+
+    payments = "myorg/myapp-payments"
+
+    notifications = "myorg/myapp-notifications"
+
+    catalog = "myorg/myapp-catalog"
+
+    gateway = "myorg/myapp-gateway"
+
+    reporting = "myorg/myapp-reporting"
+  }
+}
+
 ################################################################################
 # GitHub Actions ECR Push Role and Trust policy
 ################################################################################
@@ -42,7 +63,9 @@ resource "aws_iam_role" "github_actions_ecr" {
 ################################################################################
 
 resource "aws_iam_policy" "github_actions_ecr_push" {
-  name        = "GitHubActionsECRPush"
+   for_each = local.github_service_repositories
+    name = "GitHubActionsECRPush-${each.key}"
+
   description = "Allows CI/CD to authenticate with ECR and push MyApp images"
 
   policy = jsonencode({
@@ -71,10 +94,11 @@ resource "aws_iam_policy" "github_actions_ecr_push" {
           "ecr:UploadLayerPart"
         ]
 
-        Resource = [
-          for repository in aws_ecr_repository.microservice :
-          repository.arn
+        
+       Resource = [
+          aws_ecr_repository.microservice[each.key].arn
         ]
+
       }
     ]
   })
@@ -91,11 +115,11 @@ resource "aws_iam_policy" "github_actions_ecr_push" {
 ################################################################################
 
 resource "aws_iam_role_policy_attachment" "github_actions_ecr_push" {
-  role       = aws_iam_role.github_actions_ecr.name
-  policy_arn = aws_iam_policy.github_actions_ecr_push.arn
+  for_each = local.github_service_repositories
+
+  role       = aws_iam_role.github_actions_ecr[each.key].name
+  policy_arn = aws_iam_policy.github_actions_ecr_push[each.key].arn
 }
-
-
 
 
 
