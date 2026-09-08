@@ -269,7 +269,30 @@ infrastructure/argocd/values.yaml
 One thing to be careful about: Argo CD's gRPC/HTTPS behavior through ALB needs to be configured correctly. Before we move to the next step, I'd recommend we handle the ALB annotations for Argo CD's HTTP and gRPC traffic correctly rather than assuming the basic ingress values are sufficient.
 
 
+################################################################
+#9. Get the initial Argo CD admin password
+################################################################
+Your existing command is perfectly appropriate:
+
+kubectl -n argocd \
+  get secret argocd-initial-admin-secret \
+  -o jsonpath="{.data.password}" | base64 -d
+
+echo
+
+Terraform does not need to manage this secret.
+
+You can verify that the secret exists with:
 
 
+kubectl get secret \
+  -n argocd \
+  argocd-initial-admin-secret
 
+Then retrieve it:
 
+kubectl -n argocd \
+  get secret argocd-initial-admin-secret \
+  -o jsonpath="{.data.password}" | base64 -d
+
+echo
