@@ -23,3 +23,9 @@ output "ecr_registry_url" {
 
   value = split("/", values(aws_ecr_repository.microservice)[0].repository_url)[0]
 }
+
+output "github_actions_ecr_role_arn" {
+  description = "IAM role ARN used by GitHub Actions to push images to ECR"
+
+  value = aws_iam_role.github_actions_ecr.arn
+}
