@@ -1,30 +1,38 @@
+################################################################################
+# GitHub Application Repository → Service Mapping
+################################################################################
 
 locals {
   github_service_repositories = {
-    auth = "myorg/myapp-auth"
-
-    users = "myorg/myapp-users"
-
-    orders = "myorg/myapp-orders"
-
-    payments = "myorg/myapp-payments"
-
+    auth          = "myorg/myapp-auth"
+    users         = "myorg/myapp-users"
+    orders        = "myorg/myapp-orders"
+    payments      = "myorg/myapp-payments"
     notifications = "myorg/myapp-notifications"
-
-    catalog = "myorg/myapp-catalog"
-
-    gateway = "myorg/myapp-gateway"
-
-    reporting = "myorg/myapp-reporting"
+    catalog       = "myorg/myapp-catalog"
+    gateway       = "myorg/myapp-gateway"
+    reporting     = "myorg/myapp-reporting"
   }
 }
 
 ################################################################################
-# GitHub Actions ECR Push Role and Trust policy
+# GitHub Actions ECR Push Roles
+#
+# One IAM role per microservice.
+#
+# Example:
+#
+# myorg/myapp-auth
+#       ↓
+# GitHubActionsECR-auth
+#       ↓
+# myapp/auth
 ################################################################################
 
 resource "aws_iam_role" "github_actions_ecr" {
-  name = "GitHubActionsECRPush"
+  for_each = local.github_service_repositories
+
+  name = "GitHubActionsECR-${each.key}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -46,7 +54,7 @@ resource "aws_iam_role" "github_actions_ecr" {
           }
 
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_application_repository}:*"
+            "token.actions.githubusercontent.com:sub" = "repo:${each.value}:ref:refs/heads/main"
           }
         }
       }
@@ -55,18 +63,26 @@ resource "aws_iam_role" "github_actions_ecr" {
 
   tags = {
     Purpose = "GitHub Actions ECR push"
+    Service = each.key
   }
 }
 
 ################################################################################
-# GitHub Actions ECR Push IAM Policy
+# GitHub Actions ECR Push IAM Policies
+#
+# Each policy can push ONLY to the ECR repository belonging to that service.
+#
+# auth       → myapp/auth
+# users      → myapp/users
+# orders     → myapp/orders
+# etc.
 ################################################################################
 
 resource "aws_iam_policy" "github_actions_ecr_push" {
-   for_each = local.github_service_repositories
-    name = "GitHubActionsECRPush-${each.key}"
+  for_each = local.github_service_repositories
 
-  description = "Allows CI/CD to authenticate with ECR and push MyApp images"
+  name        = "GitHubActionsECRPush-${each.key}"
+  description = "Allows ${each.key} GitHub Actions workflow to push to its ECR repository"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -82,6 +98,7 @@ resource "aws_iam_policy" "github_actions_ecr_push" {
 
         Resource = "*"
       },
+
       {
         Sid    = "PushApplicationImages"
         Effect = "Allow"
@@ -94,24 +111,21 @@ resource "aws_iam_policy" "github_actions_ecr_push" {
           "ecr:UploadLayerPart"
         ]
 
-        
-       Resource = [
+        Resource = [
           aws_ecr_repository.microservice[each.key].arn
         ]
-
       }
     ]
   })
 
   tags = {
     Purpose = "CI/CD ECR image push"
+    Service = each.key
   }
 }
 
-
-
 ################################################################################
-# Attach ECR Push Policy to GitHub Actions Role
+# Attach Each ECR Push Policy to Its Matching IAM Role
 ################################################################################
 
 resource "aws_iam_role_policy_attachment" "github_actions_ecr_push" {
@@ -120,10 +134,3 @@ resource "aws_iam_role_policy_attachment" "github_actions_ecr_push" {
   role       = aws_iam_role.github_actions_ecr[each.key].name
   policy_arn = aws_iam_policy.github_actions_ecr_push[each.key].arn
 }
-
-
-
-
-
-
-
