@@ -26,14 +26,14 @@ variable "microservices" {
   type        = set(string)
 
   default = [
-    "auth",
-    "users",
-    "orders",
-    "payments",
-    "notifications",
-    "catalog",
-    "gateway",
-    "reporting"
+     "api-gateway"
+     "user-service"
+     "payment-service"
+     "wallet-service"
+     "transaction-service"
+     "notification-service"
+     "fraud-service"
+
   ]
 }
 
