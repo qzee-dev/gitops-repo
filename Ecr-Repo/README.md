@@ -1,7 +1,3 @@
-Yes — I’d make the README much shorter and focus on the **naming contract + `for_each` relationship**, because that is what prevents cross-service push mistakes.
-
- ECR Infrastructure README
-
 # MyApp ECR Infrastructure
 
  Terraform infrastructure for MyApp ECR repositories and GitHub Actions authentication using AWS OIDC.
