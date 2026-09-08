@@ -72,6 +72,7 @@ is appropriate. Argo CD's server continues to speak HTTPS internally.
 
 I'd structure the values file like this:
 
+infrastructure/argocd/values.yaml
 global:
   domain: argocd.example.com
 
@@ -93,22 +94,30 @@ server:
 
     hostname: argocd.example.com
 
-    # TLS is terminated by the AWS ALB.
+    # TLS terminates at the AWS ALB.
     tls: false
 
     annotations:
+      # Use "internal" for private/corporate access.
+      # Change to "internet-facing" if public access is required.
       alb.ingress.kubernetes.io/scheme: internal
+
+      # Route directly to Argo CD pods.
       alb.ingress.kubernetes.io/target-type: ip
 
+      # ALB listens only on HTTPS.
       alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
 
-      alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:eu-west-1:123456789012:certificate/xxxxxxxx"
+      # ACM certificate is attached to the ALB.
+      alb.ingress.kubernetes.io/certificate-arn: "${acm_certificate_arn}"
 
+      # Redirect HTTP → HTTPS.
       alb.ingress.kubernetes.io/ssl-redirect: "443"
 
-      # ALB -> Argo CD server uses HTTPS.
+      # ALB → Argo CD uses HTTPS.
       alb.ingress.kubernetes.io/backend-protocol: HTTPS
 
+      # ALB health check.
       alb.ingress.kubernetes.io/healthcheck-protocol: HTTPS
       alb.ingress.kubernetes.io/healthcheck-path: /healthz
       alb.ingress.kubernetes.io/success-codes: "200"
@@ -146,6 +155,121 @@ applicationSet:
 
 notifications:
   enabled: true
+===============================================================================
+
+Why server.insecure: "false"?
+Keep:
+
+configs:
+  params:
+    server.insecure: "false"
+
+because the ALB is forwarding HTTPS to Argo CD:
+
+Client
+  │
+  │ HTTPS
+  ▼
+ALB
+  │
+  │ HTTPS
+  ▼
+Argo CD Server
+
+This is different from the common configuration where TLS terminates at the ALB and the ALB forwards HTTP:
+
+Client
+  │ HTTPS
+  ▼
+ALB
+  │ HTTP
+  ▼
+Argo CD
+
+You're choosing HTTPS on both sides, which is a reasonable production configuration.
+
+Your Step 8 checks
+After:
+
+terraform apply
+
+use:
+
+kubectl get pods -n argocd
+
+and:
+
+kubectl get ingress -n argocd
+
+You should eventually see something like:
+
+NAME            CLASS   HOSTS                  ADDRESS
+argocd-server   alb     argocd.example.com     internal-xxxxx.eu-west-1.elb.amazonaws.com
+
+Then inspect the ALB ingress:
+
+kubectl describe ingress argocd-server -n argocd
+
+This is particularly useful if the ALB doesn't appear or its target group is unhealthy.
+
+Final architecture
+So we're now sticking with:
+
+                         AWS
+                          │
+                    ┌─────┴─────┐
+                    │    EKS    │
+                    └─────┬─────┘
+                          │
+           AWS Load Balancer Controller
+                          │
+                          ▼
+                  ┌──────────────┐
+                  │  Internal    │
+                  │     ALB      │
+                  │    HTTPS     │
+                  └──────┬───────┘
+                         │
+                   HTTPS :443
+                         │
+                         ▼
+                 ┌───────────────┐
+                 │  Argo CD      │
+                 │    Server     │
+                 │   replicas=2  │
+                 └───────────────┘
+
+                    ACM
+                     │
+                     │ certificate
+                     ▼
+                  ALB :443
+
+And your Terraform responsibility is now cleanly separated:
+
+eks.tf
+    └── EKS
+
+eks-pod-identity.tf
+    └── Pod Identity Agent
+
+aws-load-balancer-controller.tf
+    ├── IAM policy
+    ├── IAM role
+    ├── Pod Identity association
+    └── AWS Load Balancer Controller
+
+argocd.tf
+    ├── argocd namespace
+    └── Argo CD Helm release
+
+infrastructure/argocd/values.yaml
+    └── Argo CD + ALB ingress configuration
+
+One thing to be careful about: Argo CD's gRPC/HTTPS behavior through ALB needs to be configured correctly. Before we move to the next step, I'd recommend we handle the ALB annotations for Argo CD's HTTP and gRPC traffic correctly rather than assuming the basic ingress values are sufficient.
+
+
+
 
 
 
