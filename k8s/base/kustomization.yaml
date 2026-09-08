@@ -2,11 +2,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - auth
-  - users
-  - orders
-  - payments
-  - notifications
-  - catalog
-  - gateway
-  - reporting
+  - api-gateway
+  - user-service
+  - payment-service
+  - wallet-service
+  - transaction-service
+  - notification-service
+  - fraud-service
