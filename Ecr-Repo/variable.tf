@@ -73,3 +73,14 @@ variable "repository_encryption_type" {
     error_message = "repository_encryption_type must be AES256 or KMS."
   }
 }
+
+
+variable "github_application_repository" {
+  description = "GitHub application repository allowed to push images to ECR. Format: organization/repository"
+  type        = string
+}
+
+
+
+
+
