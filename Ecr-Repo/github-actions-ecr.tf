@@ -4,14 +4,13 @@
 
 locals {
   github_service_repositories = {
-    auth          = "myorg/myapp-auth"
-    users         = "myorg/myapp-users"
-    orders        = "myorg/myapp-orders"
-    payments      = "myorg/myapp-payments"
-    notifications = "myorg/myapp-notifications"
-    catalog       = "myorg/myapp-catalog"
-    gateway       = "myorg/myapp-gateway"
-    reporting     = "myorg/myapp-reporting"
+    api-gateway           = "myorg/myapp-api-gateway"
+    user-service          = "myorg/myapp-user-service"
+    payment-service       = "myorg/myapp-payment-service"
+    wallet-service        = "myorg/myapp-wallet-service"
+    transaction-service   = "myorg/myapp-transaction-service"
+    notification-service  = "myorg/myapp-notification-service"
+    fraud-service         = "myorg/myapp-fraud-service"
   }
 }
 
@@ -22,11 +21,11 @@ locals {
 #
 # Example:
 #
-# myorg/myapp-auth
+# myorg/myapp-payment-service
 #       ↓
-# GitHubActionsECR-auth
+# GitHubActionsECR-payment-service
 #       ↓
-# myapp/auth
+# myapp/payment-service
 ################################################################################
 
 resource "aws_iam_role" "github_actions_ecr" {
@@ -72,9 +71,9 @@ resource "aws_iam_role" "github_actions_ecr" {
 #
 # Each policy can push ONLY to the ECR repository belonging to that service.
 #
-# auth       → myapp/auth
-# users      → myapp/users
-# orders     → myapp/orders
+# api-gateway       → myapp/api-gateway
+# user-service      → myapp/user-service
+# payment-service   → myapp/payment-service
 # etc.
 ################################################################################
 
