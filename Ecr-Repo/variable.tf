@@ -27,6 +27,9 @@ variable "microservices" {
 
   default = [
      "api-gateway"
+     "dlq-processor"
+     "ledger-service"
+     "mock-service/nibss-mock"
      "user-service"
      "payment-service"
      "wallet-service"
