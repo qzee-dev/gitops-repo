@@ -1,18 +1,16 @@
-# Production GitOps Contract
+# Production GitOps Location
 
-Application manifests will be added later. The fintech production workflow
-expects one values file per service at:
+Application manifests are maintained in
+`qzee-dev/fintech-enterprise-gitops-manifest`, not in this infrastructure
+repository. The fintech production workflow updates:
 
 ```text
-k8s/production/<service>/values.yaml
+enterprise-gitops/environments/production/<service>/values.yaml
 ```
 
-The file must contain quoted `tag` and `digest` values for the workflow to
-update. The image repository is
-`<account>.dkr.ecr.us-east-1.amazonaws.com/fintech-platform/<service>`; the
-workflow validates the release metadata and digest before syncing Argo CD
-application `production-<service>`. Protect the GitHub `production` Environment
-with the required approval reviewers.
+The workflow writes the resolved ECR repository, immutable image tag, and
+verified digest before syncing Argo CD application `production-<service>`.
+Protect the GitHub `production` Environment with required approval reviewers.
 
 Production AWS resources must use `Environment=production` and the
 finance-approved `CostCenter`, plus `Owner`, `ManagedBy`, and
@@ -21,12 +19,15 @@ finance-approved `CostCenter`, plus `Owner`, `ManagedBy`, and
 Kubernetes objects should also carry matching owner/environment/cost-center
 labels. Activate AWS cost-allocation tag keys in Billing/Cost Management.
 
-Configure these GitHub Actions variables in the `production` Environment:
-`GITOPS_REPOSITORY` (`owner/repo`), `GITOPS_REPOSITORY_NAME` (repo name), and
+Configure these GitHub Actions variables in the source repository's
+`production` Environment:
+`GITOPS_REPOSITORY=qzee-dev/fintech-enterprise-gitops-manifest`,
+`GITOPS_REPOSITORY_NAME=fintech-enterprise-gitops-manifest`, and
 `ARGOCD_SERVER` (hostname only, without `https://`). Configure secrets
 `AWS_ROLE_ARN`, `AWS_ACCOUNT_ID`, `ARGOCD_AUTH_TOKEN`, `GH_APP_ID`, and
 `GH_APP_PRIVATE_KEY`. The GitOps repository must be accessible to the GitHub
-App and, with the current token setup, share the source repository owner.
+App. The account ID must be the 12-digit AWS account that owns the ECR
+repositories.
 
 The workflow uses a GitHub-hosted runner. If `ARGOCD_SERVER` resolves to the
 dev stack's internal ALB, the runner cannot reach it; use a VPC-connected

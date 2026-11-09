@@ -50,11 +50,9 @@ Activate AWS cost-allocation tag keys in Billing/Cost Management.
 
 Argo CD is installed with an internal ALB. Its hostname and ACM certificate are
 inputs; the checked-in sample values are templates, not deployable DNS/cert
-identifiers. The Argo CD application manifests are intentionally not included
-yet. When added, use app names `dev-<service>` if dev is moved under Argo CD;
-the staging/production README files document their promotion contract.
+identifiers. The shared ApplicationSet manages staging and production only;
+dev deployments remain manual direct `kubectl` updates.
 
-The current dev workflow uses direct `kubectl set image`; if Argo CD begins
-managing those same Deployments, change dev promotion to update GitOps and sync
-Argo CD, otherwise Argo CD may revert the direct change. Confirm Argo CD CLI
-gRPC compatibility through the ALB before enabling automated CLI syncs.
+Staging and production promotion contracts are documented in their respective
+README files. Confirm Argo CD CLI gRPC compatibility through the ALB before
+enabling automated CLI syncs.

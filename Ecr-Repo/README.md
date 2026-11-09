@@ -148,7 +148,8 @@ are needed.
 
  ## Image Naming
 
-Images use the service-specific ECR repository and immutable service-version-commit tag:
+Images use the service-specific ECR repository and immutable
+`<service>-<semantic-version>-<7-char-source-commit>` tag:
 
 ```
 <account>.dkr.ecr.us-east-1.amazonaws.com/fintech-platform/<service>:<service>-<version>-<short-commit>
@@ -157,7 +158,7 @@ Images use the service-specific ECR repository and immutable service-version-com
  Example:
 
 ```
-123456789012.dkr.ecr.us-east-1.amazonaws.com/fintech-platform/ledger-service:ledger-service-v1.3.5-a1b2c3d
+<account>.dkr.ecr.us-east-1.amazonaws.com/fintech-platform/ledger-service:ledger-service-v1.3.5-a1b2c3d
 ```
 
  Do not use `latest` for production deployments.

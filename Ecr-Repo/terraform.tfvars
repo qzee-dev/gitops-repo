@@ -8,5 +8,7 @@ repository_prefix = "fintech-platform"
 
 github_application_repository = "qzee-dev/fintech-platform"
 
+github_application_branch = "develop"
+
 # Required for FinOps allocation; provide the finance-approved value locally.
 # cost_center = "<finance-approved-cost-center>"
