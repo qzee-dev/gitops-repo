@@ -6,19 +6,35 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name used for tagging"
   type        = string
-  default     = "myapp"
+  default     = "fintech-platform"
+}
+
+variable "owner" {
+  description = "Accountable team or owner used for cost and operations reporting"
+  type        = string
+  default     = "qzee-dev"
+}
+
+variable "cost_center" {
+  description = "Finance-approved cost center code for AWS cost allocation"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.cost_center)) > 0
+    error_message = "cost_center must be set to a non-empty finance-approved code."
+  }
 }
 
 variable "environment" {
   description = "Environment name"
   type        = string
-  default     = "production"
+  default     = "shared"
 }
 
 variable "repository_prefix" {
   description = "Prefix used for ECR repository names"
   type        = string
-  default     = "myapp"
+  default     = "fintech-platform"
 }
 
 variable "microservices" {
@@ -26,17 +42,17 @@ variable "microservices" {
   type        = set(string)
 
   default = [
-     "api-gateway"
-     "dlq-processor"
-     "ledger-service"
-     "mock-service/nibss-mock"
-     "user-service"
-     "payment-service"
-     "wallet-service"
-     "transaction-service"
-     "notification-service"
-     "fraud-service"
-
+    "api-gateway",
+    "dlq-processor",
+    "mock-service",
+    "ledger-service",
+    "user-service",
+    "payment-service",
+    "wallet-service",
+    "transaction-service",
+    "notification-service",
+    "fraud-service",
+    "web",
   ]
 }
 
@@ -81,6 +97,12 @@ variable "repository_encryption_type" {
 variable "github_application_repository" {
   description = "GitHub application repository allowed to push images to ECR. Format: organization/repository"
   type        = string
+}
+
+variable "github_application_branch" {
+  description = "Git branch allowed to publish release images"
+  type        = string
+  default     = "develop"
 }
 
 

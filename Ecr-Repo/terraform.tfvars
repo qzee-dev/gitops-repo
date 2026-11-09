@@ -1,7 +1,12 @@
-aws_region = "eu-west-1"
+aws_region = "us-east-1"
 
-project_name = "myapp"
+project_name = "fintech-platform"
 
-environment = "production"
+environment = "shared"
 
-repository_prefix = "myapp"
+repository_prefix = "fintech-platform"
+
+github_application_repository = "qzee-dev/fintech-platform"
+
+# Required for FinOps allocation; provide the finance-approved value locally.
+# cost_center = "<finance-approved-cost-center>"

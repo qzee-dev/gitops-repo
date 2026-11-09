@@ -34,7 +34,7 @@ resource "aws_iam_role" "aws_load_balancer_controller" {
 
   tags = {
     Name      = "${var.cluster_name}-aws-load-balancer-controller"
-    ManagedBy = "Terraform"
+    Component = "aws-load-balancer-controller"
   }
 }
 ######################################
@@ -55,6 +55,10 @@ resource "aws_eks_pod_identity_association" "aws_load_balancer_controller" {
   service_account = "aws-load-balancer-controller"
 
   role_arn = aws_iam_role.aws_load_balancer_controller.arn
+
+  tags = merge(local.common_tags, {
+    Component = "aws-load-balancer-controller"
+  })
 }
 #####################################
 #Helm Release
@@ -89,6 +93,12 @@ resource "helm_release" "aws_load_balancer_controller" {
     name  = "serviceAccount.name"
     value = "aws-load-balancer-controller"
   }
+
+  depends_on = [
+    aws_eks_addon.pod_identity_agent,
+    aws_iam_role_policy_attachment.aws_load_balancer_controller,
+    aws_eks_pod_identity_association.aws_load_balancer_controller,
+  ]
 }
 
 

@@ -10,17 +10,7 @@ resource "aws_eks_addon" "pod_identity_agent" {
 
   tags = {
     Name        = "${var.cluster_name}-pod-identity-agent"
-    ManagedBy   = "Terraform"
+    Component   = "pod-identity-agent"
     Addon       = "eks-pod-identity-agent"
   }
-}
-
-#########################################################
-#Pod identity assosciation
-###########################################################
-resource "aws_eks_pod_identity_association" "myapp" {
-  cluster_name    = var.cluster_name
-  namespace       = var.app_namespace
-  service_account = "myapp"
-  role_arn        = aws_iam_role.myapp.arn
 }

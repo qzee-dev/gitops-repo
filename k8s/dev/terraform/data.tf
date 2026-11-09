@@ -8,7 +8,4 @@ data "aws_eks_cluster" "this" {
   name = var.cluster_name
 }
 
-# Get authentication token for the EKS cluster
-data "aws_eks_cluster_auth" "this" {
-  name = var.cluster_name
-}
+# This platform add-on stack requires the EKS cluster to exist already.

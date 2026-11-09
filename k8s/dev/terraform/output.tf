@@ -11,11 +11,6 @@ output "cluster_endpoint" {
 }
 
 
-output "pod_identity_agent_status" {
-  value = aws_eks_addon.pod_identity_agent.status
-}
-
 output "pod_identity_agent_version" {
   value = aws_eks_addon.pod_identity_agent.addon_version
 }
-

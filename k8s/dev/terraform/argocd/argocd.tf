@@ -29,13 +29,18 @@ resource "helm_release" "argocd" {
       "${path.module}/argocd/values.yaml",
       {
         acm_certificate_arn = var.acm_certificate_arn
+        argocd_domain       = var.argocd_domain
+        cost_center         = var.cost_center
+        environment         = var.environment
+        owner               = var.owner
+        project_name        = var.project_name
       }
     )
   ]
 
   depends_on = [
     kubernetes_namespace.argocd,
-    helm_release.aws_load_balancer_controller
+    helm_release.aws_load_balancer_controller,
+    helm_release.keda,
   ]
 }
-

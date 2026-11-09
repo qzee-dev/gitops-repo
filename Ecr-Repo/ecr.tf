@@ -8,17 +8,17 @@
 #####################################################################################
 
 resource "aws_ecr_repository" "microservice" {
-  for_each = toset(local.microservices)
+  for_each = local.ecr_repositories
 
-  name                 = "myapp/${each.value}"
-  image_tag_mutability = "IMMUTABLE"
+  name                 = each.value
+  image_tag_mutability = var.image_tag_mutability
 
   image_scanning_configuration {
-    scan_on_push = true
+    scan_on_push = var.scan_on_push
   }
 
   encryption_configuration {
-    encryption_type = "AES256"
+    encryption_type = var.repository_encryption_type
   }
 
    lifecycle {
@@ -26,10 +26,8 @@ resource "aws_ecr_repository" "microservice" {
   }
 
   tags = {
-    Project     = "myapp"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Service     = each.value
+    Service   = each.key
+    Component = "container-image-repository"
   }
 }
 

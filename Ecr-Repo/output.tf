@@ -25,7 +25,7 @@ output "ecr_registry_url" {
 }
 
 output "github_actions_ecr_role_arn" {
-  description = "IAM role ARN used by GitHub Actions to push images to ECR"
+  description = "Shared IAM role ARN for the fintech release workflow"
 
-  value = aws_iam_role.github_actions_ecr.arn
+  value = aws_iam_role.github_actions_ecr_release.arn
 }

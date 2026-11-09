@@ -1,15 +1,15 @@
-# MyApp ECR Infrastructure
+# Fintech Platform ECR Infrastructure
 
- Terraform infrastructure for MyApp ECR repositories and GitHub Actions authentication using AWS OIDC.
+Terraform infrastructure for Fintech Platform ECR repositories and GitHub Actions authentication using AWS OIDC.
 
  ## Architecture
 
 ```
-Application Git Repo
+Fintech Monorepo Release Workflow
         │
         │ GitHub Actions + OIDC
         ▼
-Service-specific IAM Role
+Shared Release IAM Role
         │
         │ ECR push permission
         ▼
@@ -27,46 +27,38 @@ EKS
 
  ## Services
 
- The platform contains eight services:
+ The platform contains these deployable services:
 
 ```
-auth
-users
-orders
-payments
-notifications
-catalog
-gateway
-reporting
+api-gateway
+dlq-processor
+mock-service
+ledger-service
+user-service
+payment-service
+wallet-service
+transaction-service
+notification-service
+fraud-service
+web
 ```
 
- Terraform uses `for_each` to create the resources from the same service key.
+Terraform creates one immutable ECR repository per service in `us-east-1`.
 
 ```
-locals {
-  services = {
-    auth          = "myorg/myapp-auth"
-    users         = "myorg/myapp-users"
-    orders        = "myorg/myapp-orders"
-    payments      = "myorg/myapp-payments"
-    notifications = "myorg/myapp-notifications"
-    catalog       = "myorg/myapp-catalog"
-    gateway       = "myorg/myapp-gateway"
-    reporting     = "myorg/myapp-reporting"
-  }
-}
+repository_prefix = "fintech-platform"
 ```
 
- The key is intentionally the service name.
+The ECR repository is named `fintech-platform/<service>`.
 
  For example:
 
 ```
-auth
+api-gateway
  │
- ├── GitHub repository: myorg/myapp-auth
- ├── IAM role:          GitHubActionsECR-auth
- └── ECR repository:    myapp/auth
+ ├── GitHub repository: qzee-dev/fintech-platform
+ ├── IAM role:          GitHubActionsECRRelease
+ └── ECR repository:    fintech-platform/api-gateway
 ```
 
  The same pattern is used for every service.
@@ -77,33 +69,23 @@ auth
 
 ```
 resource "aws_ecr_repository" "service" {
-  for_each = local.services
+        for_each = local.ecr_repositories
 
-  name = "myapp/${each.key}"
+        name = each.value
 }
 ```
 
- IAM roles:
+ The release workflow assumes one shared IAM role:
 
 ```
-resource "aws_iam_role" "github_actions" {
-  for_each = local.services
-
-  name = "GitHubActionsECR-${each.key}"
-}
+GitHubActionsECRRelease
 ```
 
- ECR policies:
+ The role can publish to repositories under `fintech-platform/*`. The selected
+ service determines the repository used by the workflow.
 
 ```
-resource "aws_iam_policy" "ecr_push" {
-  for_each = local.services
-
-  name = "GitHubActionsECRPush-${each.key}"
-
-  # Policy is restricted to:
-  # aws_ecr_repository.service[each.key].arn
-}
+fintech-platform/<service>
 ```
 
  This creates the following relationship:
@@ -111,15 +93,11 @@ resource "aws_iam_policy" "ecr_push" {
 ```
 service key
     │
-    ├── auth
-    │    ├── myorg/myapp-auth
-    │    ├── GitHubActionsECR-auth
-    │    └── myapp/auth
+        ├── api-gateway
+        │    └── fintech-platform/api-gateway
     │
-    ├── users
-    │    ├── myorg/myapp-users
-    │    ├── GitHubActionsECR-users
-    │    └── myapp/users
+        ├── ledger-service
+        │    └── fintech-platform/ledger-service
     │
     └── ...
 ```
@@ -130,83 +108,77 @@ service key
 
 ```
 GitHub Repository
-    myorg/myapp-<service>
+        qzee-dev/fintech-platform
 
 IAM Role
-    GitHubActionsECR-<service>
+        GitHubActionsECRRelease
 
 ECR Repository
-    myapp/<service>
+        fintech-platform/<service>
 ```
 
  Example:
 
 ```
-myorg/myapp-auth
+qzee-dev/fintech-platform (develop branch)
         │
         ▼
-GitHubActionsECR-auth
+GitHubActionsECRRelease
         │
         ▼
-myapp/auth
+fintech-platform/<selected-service>
 ```
 
  This naming convention provides a clear, non-conflicting relationship between the application and its AWS resources.
 
- ## Push Isolation
+## ECR Access Scope
 
- Each GitHub repository receives permission to push **only to its own ECR repository**.
+The monorepo release role can push and inspect images only in repositories under
+the `fintech-platform/` prefix. It is not a separate IAM boundary per service.
 
- For `auth`:
-
-```
-myorg/myapp-auth
-       │
-       ▼
-GitHubActionsECR-auth
-       │
-       └── ALLOW → myapp/auth
-```
-
- It cannot push to:
+The workflow is trusted only for the configured repository and branch:
 
 ```
-myapp/users
-myapp/orders
-myapp/payments
-myapp/catalog
-...
+repo:qzee-dev/fintech-platform:ref:refs/heads/develop
 ```
 
- Even if the workflow is incorrectly changed to:
-
-```
-ECR_REPOSITORY: myapp/payments
-```
-
- AWS denies the push because the `auth` role only has permission for:
-
-```
-arn:aws:ecr:<region>:<account-id>:repository/myapp/auth
-```
-
- This prevents one application's CI pipeline from pushing images into another application's repository.
+The GitHub Actions secret `AWS_ROLE_ARN` should be set to the
+`github_actions_ecr_role_arn` Terraform output. No long-lived AWS access keys
+are needed.
 
  ## Image Naming
 
- Images use the service-specific ECR repository and Git commit SHA:
+Images use the service-specific ECR repository and immutable service-version-commit tag:
 
 ```
-<account>.dkr.ecr.<region>.amazonaws.com/myapp/<service>:<git-sha>
+<account>.dkr.ecr.us-east-1.amazonaws.com/fintech-platform/<service>:<service>-<version>-<short-commit>
 ```
 
  Example:
 
 ```
-123456789012.dkr.ecr.eu-west-1.amazonaws.com/myapp/auth:a8d91c2
+123456789012.dkr.ecr.us-east-1.amazonaws.com/fintech-platform/ledger-service:ledger-service-v1.3.5-a1b2c3d
 ```
 
  Do not use `latest` for production deployments.
+
+## FinOps Tags
+
+Every AWS resource managed by this stack inherits these tags:
+
+```text
+Owner       = qzee-dev (override with the accountable team/owner)
+ManagedBy   = Terraform
+Environment = shared
+CostCenter  = required finance-approved cost center
+Project     = fintech-platform
+```
+
+Each ECR repository also has `Service` and `Component` tags. ECR is tagged
+`shared` because the same published image can be promoted to dev, staging, and
+production. Set `cost_center` through `TF_VAR_cost_center` or a local ignored
+tfvars file before planning/applying. Activate the approved cost-allocation tag
+keys in AWS Billing/Cost Management before expecting them in Cost Explorer.
 
  ## GitHub OIDC
 
@@ -219,44 +191,37 @@ GitHub
    ▼
 AWS IAM OIDC Provider
    │
-   ├── GitHubActionsECR-auth
-   ├── GitHubActionsECR-users
-   ├── GitHubActionsECR-orders
-   ├── GitHubActionsECR-payments
-   ├── GitHubActionsECR-notifications
-   ├── GitHubActionsECR-catalog
-   ├── GitHubActionsECR-gateway
-   └── GitHubActionsECR-reporting
+        └── GitHubActionsECRRelease
 ```
 
- Each role has a trust policy restricted to its corresponding GitHub repository.
+The OIDC trust is restricted to `qzee-dev/fintech-platform` on `develop`. If
+the OIDC provider already exists in the AWS account, import it into this
+Terraform state before applying to avoid a duplicate-provider error.
 
  No long-lived AWS access keys are required.
 
  ## Terraform Files
 
 ```
-myapp-ecr-infrastructure/
+fintech-platform-ecr-infrastructure/
 ├── README.md
-├── versions.tf
+├── version.tf
 ├── provider.tf
-├── variables.tf
-├── locals.tf
+├── variable.tf
+├── local.tf
 ├── ecr.tf
 ├── github-actions-ecr.tf
-├── outputs.tf
-└── terraform.tfvars.example
+├── output.tf
+└── terraform.tfvars
 ```
 
  The important design rule is:
 
 ```
-ONE service key
-      │
-      ├── ONE GitHub repository
-      ├── ONE IAM role
-      ├── ONE ECR policy
-      └── ONE ECR repository
+ONE monorepo release workflow
+        ├── ONE OIDC-trusted release role
+        └── ONE ECR repository per service
 ```
 
- This keeps the CI/CD permissions isolated and prevents cross-service ECR pushes.
+The role is limited to the fintech ECR repository namespace. Environment-specific
+deployment roles should remain separate from this image-publishing role.

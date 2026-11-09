@@ -1,5 +1,5 @@
 global:
-  domain: argocd.example.com
+  domain: ${argocd_domain}
 
   networkPolicy:
     create: true
@@ -17,7 +17,7 @@ server:
     controller: aws
     ingressClassName: alb
 
-    hostname: argocd.example.com
+    hostname: ${argocd_domain}
 
     # TLS is terminated by the AWS ALB.
     tls: false
@@ -29,6 +29,7 @@ server:
       alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
 
       alb.ingress.kubernetes.io/certificate-arn: "${acm_certificate_arn}"   #[no hardcoded]
+      alb.ingress.kubernetes.io/tags: "Owner=${owner},ManagedBy=AWSLoadBalancerController,Environment=${environment},CostCenter=${cost_center},Project=${project_name},Service=argocd"
 
       alb.ingress.kubernetes.io/ssl-redirect: "443"
 
