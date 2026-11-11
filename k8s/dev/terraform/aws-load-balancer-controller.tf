@@ -5,7 +5,7 @@ resource "aws_iam_policy" "aws_load_balancer_controller" {
   name        = "${var.cluster_name}-AWSLoadBalancerControllerPolicy"
   description = "IAM policy for AWS Load Balancer Controller"
 
-  policy = file("${path.module}/iam-policy.json")
+  policy = file("${path.module}/../../modules/argocd-platform/iam-policy.json")
 }
 ######################################
 #IAM Role With Trust policy
@@ -100,7 +100,6 @@ resource "helm_release" "aws_load_balancer_controller" {
     aws_eks_pod_identity_association.aws_load_balancer_controller,
   ]
 }
-
 
 
 

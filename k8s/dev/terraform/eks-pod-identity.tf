@@ -9,8 +9,8 @@ resource "aws_eks_addon" "pod_identity_agent" {
   resolve_conflicts_on_update = "OVERWRITE"
 
   tags = {
-    Name        = "${var.cluster_name}-pod-identity-agent"
-    Component   = "pod-identity-agent"
-    Addon       = "eks-pod-identity-agent"
+    Name      = "${var.cluster_name}-pod-identity-agent"
+    Component = "pod-identity-agent"
+    Addon     = "eks-pod-identity-agent"
   }
 }

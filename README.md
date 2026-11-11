@@ -13,12 +13,22 @@ deployment handoffs, see the [infrastructure runbook](RUNBOOK.md).
 	repositories in `us-east-1` and one OIDC release-publisher role for
 	`qzee-dev/fintech-platform` on `develop`.
 - [`k8s/dev/terraform`](k8s/dev/terraform) configures add-ons on an existing dev
-	EKS cluster: Pod Identity, AWS Load Balancer Controller, KEDA, and Argo CD. It
-	does not create the EKS cluster itself.
-- `k8s/staging` and `k8s/production` are reserved for future infrastructure
-	configuration; application values live in the enterprise manifest repository.
-	Promotion workflows update `enterprise-gitops/environments/<environment>/<service>/values.yaml`
-	there, and Argo CD applications are named `<environment>-<service>`.
+	EKS cluster: Pod Identity, AWS Load Balancer Controller, KEDA, and the
+	selected application ingress module. Dev application releases are deployed
+	manually by digest; this root does not install Argo CD.
+- [`k8s/README.md`](k8s/README.md) documents the current ingress-controller model,
+	shared add-ons, and the per-environment controller selection design.
+- [`k8s/staging/terraform`](k8s/staging/terraform) and
+	[`k8s/production/terraform`](k8s/production/terraform) install the same
+	required platform add-ons and the intended Argo CD instances on existing
+	environment clusters. Each root independently selects one application
+	ingress module; the AWS Load Balancer Controller remains a shared platform
+	dependency for Argo CD ALBs and AWS-backed Services.
+- Application values live in the enterprise manifest repository. Separate
+	staging and production ApplicationSets generate
+	`<environment>-<service>` applications on their respective clusters.
+	Dev releases use the source repository's manual deployment workflow. See
+	[RUNBOOK.md](RUNBOOK.md) for deployment and environment responsibilities.
 
 ## Release and Promotion Flow
 

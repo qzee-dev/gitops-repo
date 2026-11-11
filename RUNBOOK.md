@@ -9,20 +9,28 @@ of truth.
 | Path | Responsibility |
 | --- | --- |
 | `Ecr-Repo/` | Creates immutable ECR repositories under `fintech-platform/` and the GitHub OIDC role used by the source repo's release workflow. |
-| `k8s/dev/terraform/` | Installs platform add-ons on an existing dev EKS cluster, including Argo CD, KEDA, Pod Identity, and AWS Load Balancer Controller. It does not create the cluster. |
-| `k8s/staging/`, `k8s/production/` | Documentation/reserved infrastructure locations. Application values are in `qzee-dev/fintech-enterprise-gitops-manifest`. |
+| `k8s/dev/terraform/` | Installs Pod Identity, AWS Load Balancer Controller, and KEDA on an existing dev EKS cluster. It does not install Argo CD or create the cluster. |
+| `k8s/modules/argocd-platform/` | Shared Terraform module for Pod Identity, AWS Load Balancer Controller, KEDA, and one environment's Argo CD instance. |
+| `k8s/staging/terraform/`, `k8s/production/terraform/` | Independent Terraform roots/states for the existing staging and production EKS clusters. They do not create clusters or networks. |
 
 ### How it fits the deployment flow
 
 1. The source repository, `qzee-dev/fintech-platform`, builds an image and
    publishes it to one of this repository's `fintech-platform/<service>` ECR
    repositories.
-2. Its manual dev workflow uses an environment-specific AWS role to update the
-   existing Deployment in namespace `dev` with the exact image digest.
+2. Its manually dispatched dev workflow lists successful release runs, then
+   uses the selected release run ID and an environment-specific AWS role to
+   update the existing Deployment in namespace `dev` with the verified image
+   digest. The Deployment must already exist; the workflow does not install
+   application manifests or create it.
 3. Its staging and production promotion workflows update values in
    `qzee-dev/fintech-enterprise-gitops-manifest`.
-4. Argo CD reads that manifest repository and syncs staging and production
-   applications to the cluster configured as its destination.
+4. The environment-specific Argo CD reads its matching manifest ApplicationSet
+   and syncs applications to the local staging or production cluster.
+
+The target architecture has no Argo CD application deployment in dev: dev uses
+the direct manual workflow, while staging and production each use their own
+Argo CD instance and ApplicationSet.
 
 The ECR publisher role is separate from the dev/staging/production deployment
 roles. Do not reuse the image-publisher role as a cluster deployment role.
@@ -96,9 +104,9 @@ add-ons; it does not provision the VPC, cluster, node groups, ACM certificate,
 or application Deployments.
 
 1. In `k8s/dev/terraform/`, provide real values for `cluster_name`, `vpc_id`,
-   `acm_certificate_arn`, `argocd_domain`, and finance-approved `cost_center`
-   using ignored local tfvars or `TF_VAR_*` environment variables. Do not commit
-   account secrets or private endpoint credentials.
+   finance-approved `cost_center` using ignored local tfvars or `TF_VAR_*`
+   environment variables. Do not commit account secrets or private endpoint
+   credentials.
 2. Confirm AWS credentials can describe the cluster and the operator can reach
    the Kubernetes API with sufficient permissions for Helm releases, CRDs,
    namespaces, and add-ons.
@@ -112,16 +120,16 @@ or application Deployments.
    terraform apply
    ```
 
-   Inspect the plan carefully, especially changes that replace Argo CD, KEDA,
-   or their CRDs. The KEDA resource is protected because uninstalling it can
-   remove CRDs and stored `ScaledObject` objects.
+   Inspect the plan carefully. The dev root does not install Argo CD. If
+   migrating from a prior state that still tracks Argo CD, first inspect the
+   plan for Argo CD Helm release/namespace destruction and follow the safe
+   retirement steps below. The KEDA resource is protected because uninstalling
+   it can remove CRDs and stored `ScaledObject` objects.
 
-4. Verify the cluster is active, Argo CD is healthy, and KEDA CRDs are
-   installed:
+4. Verify the cluster is active and KEDA CRDs are installed:
 
    ```bash
    aws eks describe-cluster --name "$CLUSTER_NAME" --region us-east-1
-   kubectl get pods -n argocd
    kubectl get crd scaledobjects.keda.sh
    ```
 
@@ -129,21 +137,65 @@ or application Deployments.
    `EKS_CLUSTER_NAME`, `AWS_ACCOUNT_ID`, and `AWS_ROLE_ARN`. Grant that role
    only the required ECR read, `eks:DescribeCluster`, and namespace-`dev`
    Kubernetes permissions. Ensure worker nodes can pull from the ECR account.
-6. The dev workflow updates an existing `deployment/<service>` in namespace
-   `dev`; this Terraform stack does not create those application Deployments.
-   Verify the deployment exists before the first dev release.
+6. The manual dev workflow in `qzee-dev/fintech-platform` uses
+   `workflow_dispatch`: run `list`, choose successful release run ID(s), then
+   run `deploy`. It validates release metadata and the digest, verifies the
+   existing `deployment/<service>` in namespace `dev`, sets the container
+   image to the ECR `repository@digest`, waits for rollout, and verifies the
+   image and ready replicas. This Terraform stack does not create those
+   application Deployments; bootstrap them before the first dev release.
 
-Argo CD is installed by this stack, but the ApplicationSet's current destination
-is the local cluster where that Argo CD runs. The ApplicationSet manages
-staging and production applications, not dev. If staging and production belong
-on separate clusters, register those clusters with Argo CD and change the
-ApplicationSet destinations before deploying there. Do not assume separate
-clusters are configured merely because folders exist for each environment.
+## Provisioning staging and production Argo CD
+
+The staging and production Terraform roots use separate state and a shared
+add-on module, but own distinct S3 backend keys:
+`staging/terraform.tfstate` and `production/terraform.tfstate`. Each root has
+its own backend configuration example and working directory. Always initialize,
+plan, and apply from the matching environment directory; never copy, rename, or
+reuse another environment's state. The bucket must be versioned, encrypted,
+private, and shared only by approved Terraform operators. Never reuse the dev
+state file, which remains local to the dev root. Each staging/production root
+expects an existing environment EKS cluster, VPC, ACM certificate, private DNS
+name, finance-approved cost center, and an explicit AWS Load Balancer
+Controller chart version. Supply these values with `TF_VAR_*` variables or
+ignored local tfvars. Scope backend IAM access by environment: the staging
+role should access only the staging state object and lock object, and the
+production role only the production objects. Separate state keys do not
+restrict users whose AWS role can access both.
+
+Before planning, check whether Pod Identity, KEDA, or the AWS Load Balancer
+Controller is already installed. Import existing resources into the matching
+root or agree on one owner; do not let Terraform replace resources owned by
+another stack. Ensure private subnets have the discovery tags required by the
+selected AWS Load Balancer Controller version. Review and apply staging first,
+then production under the required production approval. Confirm private DNS
+and runner connectivity; GitHub-hosted runners cannot reach the configured
+internal ALBs.
+
+On each environment cluster, bootstrap `project.yaml` and only that
+environment's ApplicationSet from the manifest repository. Set the matching
+GitHub Environment's `ARGOCD_SERVER` to the new hostname and verify a
+promotion end-to-end.
+
+### Retiring Argo CD from dev
+
+The dev Terraform root no longer declares an Argo CD Helm release or namespace.
+If the previous dev root has Argo CD resources in its Terraform state,
+removing the declarations will produce a destroy plan for those resources.
+Inspect the existing dev state and cluster before applying. Check whether the
+existing dev Argo CD instance, if any, has Applications that still own
+workloads that must remain, and handle their finalizers and deletion behavior
+deliberately. Then review the Terraform plan and confirm it removes only the
+intended Argo CD release/namespace, not KEDA, its CRDs, the AWS Load Balancer
+Controller, Pod Identity, or dev application Deployments. Do not apply dev
+state changes to staging or production; those roots retain their separate
+Argo CD installations through the shared module.
 
 ## Change and recovery rules
 
 - Review Terraform plans before every apply. Never remove the shared OIDC
-  provider, ECR repositories, Argo CD, or KEDA as incidental cleanup.
+  provider, ECR repositories, staging/production Argo CD instances, or KEDA as
+  incidental cleanup.
 - ECR tags are immutable. Publish a new release tag; do not overwrite or
   retag an existing image.
 - For a Kubernetes add-on incident, inspect Terraform state/plan and the
