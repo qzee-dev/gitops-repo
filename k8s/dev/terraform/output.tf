@@ -11,6 +11,6 @@ output "cluster_endpoint" {
 }
 
 
-output "pod_identity_agent_version" {
-  value = aws_eks_addon.pod_identity_agent.addon_version
+output "enabled_addons" {
+  value = module.platform.enabled_addons
 }

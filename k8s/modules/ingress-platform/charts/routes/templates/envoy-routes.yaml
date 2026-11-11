@@ -1,4 +1,9 @@
 {{- if eq .Values.controller "envoy" }}
+{{- $sectionName := "http" -}}
+{{- if .Values.tlsEnabled -}}
+{{- $sectionName = "https" -}}
+{{- end }}
+{{- if .Values.frontend.enabled }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -8,13 +13,15 @@ spec:
   parentRefs:
     - name: edge
       namespace: edge-gateway
-      sectionName: https
+      sectionName: {{ $sectionName }}
   hostnames:
     - {{ .Values.hostnames.frontend | quote }}
   rules:
     - backendRefs:
         - name: frontend
           port: 80
+{{- end }}
+{{- if .Values.monitoring.enabled }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -25,13 +32,15 @@ spec:
   parentRefs:
     - name: edge
       namespace: edge-gateway
-      sectionName: https
+      sectionName: {{ $sectionName }}
   hostnames:
     - {{ .Values.hostnames.grafana | quote }}
   rules:
     - backendRefs:
         - name: kube-prometheus-stack-grafana
           port: 80
+{{- end }}
+{{- if .Values.monitoring.enabled }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -42,13 +51,15 @@ spec:
   parentRefs:
     - name: edge
       namespace: edge-gateway
-      sectionName: https
+      sectionName: {{ $sectionName }}
   hostnames:
     - {{ .Values.hostnames.prometheus | quote }}
   rules:
     - backendRefs:
         - name: kube-prometheus-stack-prometheus
           port: 9090
+{{- end }}
+{{- if and .Values.tlsEnabled .Values.frontend.enabled }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -68,6 +79,8 @@ spec:
           requestRedirect:
             scheme: https
             statusCode: 301
+{{- end }}
+{{- if and .Values.tlsEnabled .Values.monitoring.enabled }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -88,4 +101,5 @@ spec:
           requestRedirect:
             scheme: https
             statusCode: 301
+{{- end }}
 {{- end }}

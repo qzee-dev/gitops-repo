@@ -30,6 +30,23 @@ deployment handoffs, see the [infrastructure runbook](RUNBOOK.md).
 	Dev releases use the source repository's manual deployment workflow. See
 	[RUNBOOK.md](RUNBOOK.md) for deployment and environment responsibilities.
 
+## Kubernetes architecture overview
+
+The platform is organized as a shared base layer plus an environment-specific ingress layer:
+
+- `k8s/modules/platform` composes the cluster-wide capabilities that are shared across environments
+- `k8s/modules/<ingress-controller>` contains the selected ingress implementation for that environment
+- each environment root chooses one ingress controller through `ingress_controller`
+- AWS Load Balancer Controller is not optional in the current design when an environment exposes workload traffic through AWS-managed load balancers
+
+The environment policy is:
+
+- Dev: `f5-nginx`
+- Staging: `alb`
+- Production: `envoy`
+
+This keeps the shared AWS integration stable while allowing each cluster to run its own supported ingress pattern. For a complete operational explanation, see [k8s/README.md](k8s/README.md) and [RUNBOOK.md](RUNBOOK.md).
+
 ## Release and Promotion Flow
 
 1. The fintech release workflow builds/scans a service image, pushes an

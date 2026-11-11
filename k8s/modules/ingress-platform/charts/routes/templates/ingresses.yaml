@@ -3,6 +3,7 @@
 {{- if eq .Values.controller "f5-nginx" -}}
 {{- $className = "f5-nginx" -}}
 {{- end -}}
+{{- if .Values.frontend.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -10,10 +11,12 @@ metadata:
   namespace: {{ .Values.appNamespace }}
 spec:
   ingressClassName: {{ $className }}
+  {{ if .Values.tlsEnabled }}
   tls:
     - hosts:
         - {{ .Values.hostnames.frontend | quote }}
-      secretName: frontend-{{ .Values.controller }}-tls
+      secretName: frontend-wildcard-tls
+  {{ end }}
   rules:
     - host: {{ .Values.hostnames.frontend | quote }}
       http:
@@ -25,6 +28,8 @@ spec:
                 name: frontend
                 port:
                   number: 80
+{{- end }}
+{{- if .Values.monitoring.enabled }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -33,11 +38,13 @@ metadata:
   namespace: monitoring
 spec:
   ingressClassName: {{ $className }}
+  {{ if .Values.tlsEnabled }}
   tls:
     - hosts:
         - {{ .Values.hostnames.grafana | quote }}
         - {{ .Values.hostnames.prometheus | quote }}
-      secretName: monitoring-{{ .Values.controller }}-tls
+      secretName: monitoring-wildcard-tls
+        {{ end }}
   rules:
     - host: {{ .Values.hostnames.grafana | quote }}
       http:
@@ -59,7 +66,9 @@ spec:
                 name: kube-prometheus-stack-prometheus
                 port:
                   number: 9090
+{{- end }}
 {{- else if eq .Values.controller "alb" }}
+{{- if .Values.frontend.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -85,6 +94,8 @@ spec:
                 name: frontend
                 port:
                   number: 80
+{{- end }}
+{{- if .Values.monitoring.enabled }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -121,4 +132,5 @@ spec:
                 name: kube-prometheus-stack-prometheus
                 port:
                   number: 9090
+{{- end }}
 {{- end }}

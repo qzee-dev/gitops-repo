@@ -2,10 +2,15 @@ controller: envoy
 environment: dev
 appNamespace: dev
 domainSuffix: example.invalid
+tlsEnabled: true
 hostnames:
   frontend: app.example.invalid
   grafana: grafana.example.invalid
   prometheus: prometheus.example.invalid
+frontend:
+  enabled: true
+monitoring:
+  enabled: true
 issuer:
   create: true
   name: letsencrypt-dns01

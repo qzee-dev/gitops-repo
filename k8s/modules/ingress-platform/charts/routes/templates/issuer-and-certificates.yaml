@@ -18,7 +18,7 @@ spec:
             region: {{ .Values.issuer.region | quote }}
             hostedZoneID: {{ .Values.issuer.hostedZoneID | quote }}
 {{- end }}
-{{- if eq .Values.controller "envoy" }}
+{{- if and .Values.issuer.create (eq .Values.controller "envoy") }}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -33,7 +33,7 @@ spec:
   dnsNames:
     - {{ printf "*.%s" .Values.domainSuffix | quote }}
     - {{ .Values.domainSuffix | quote }}
-{{- else if eq .Values.controller "nginx" }}
+{{- else if and .Values.issuer.create (or (eq .Values.controller "nginx") (eq .Values.controller "f5-nginx")) }}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate

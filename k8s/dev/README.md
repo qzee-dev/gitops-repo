@@ -17,9 +17,10 @@ The intended steady state is:
   ApplicationSet, and promotion workflow. Those instances sync only to their
   respective clusters.
 
-Argo CD is not installed or targeted by the dev Terraform root. Ingress
-controllers and the shared monitoring/frontend add-ons are managed separately
-from application releases.
+The default dev profile does not enable Argo CD. It can be enabled explicitly
+with `enable_argocd`, but the documented dev application release flow remains
+the manual digest-based workflow. Ingress controllers and add-ons are selected
+independently from application releases.
 
 KEDA must be installed on every EKS cluster that runs KEDA-enabled consumer
 workloads, before those workloads' `ScaledObject` resources are applied. This
@@ -85,6 +86,16 @@ environment READMEs. Their Argo CD instances and application manifests are
 separate from this manual dev deployment process.
 
 ## Ingress and Shared Add-ons
+
+The root composes independently selected add-ons through
+`modules/platform`. Configure `enable_keda`, `enable_cert_manager`,
+`enable_route53_dns01`, `enable_monitoring`, `enable_frontend`, and
+`enable_argocd` independently in local tfvars. `ingress_controller` selects
+one controller; NLB-backed controllers use
+`ingress_load_balancer_scheme` (`internal` or `internet-facing`). ALB mode
+requires an ACM certificate ARN. Selecting ingress automatically enables the
+AWS Load Balancer Controller and EKS Pod Identity Agent. Terraform checks
+required DNS, certificate, and Grafana values before installation.
 
 The dev root selects one dedicated controller module using
 `ingress_controller`. Its default is `f5-nginx`; supported values are `envoy`,

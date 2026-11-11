@@ -1,25 +1,5 @@
-variable "aws_region" {
-  description = "AWS region containing the existing EKS cluster"
-  type        = string
-}
-
-variable "cluster_name" {
-  description = "Name of the existing EKS cluster"
-  type        = string
-}
-
 variable "environment" {
   description = "Environment managed by this stack"
-  type        = string
-
-  validation {
-    condition     = contains(["staging", "production"], var.environment)
-    error_message = "environment must be staging or production."
-  }
-}
-
-variable "vpc_id" {
-  description = "VPC ID of the existing EKS cluster"
   type        = string
 }
 
@@ -38,26 +18,10 @@ variable "argocd_domain" {
   }
 }
 
-variable "aws_load_balancer_controller_chart_version" {
-  description = "Approved, pinned AWS Load Balancer Controller Helm chart version"
-  type        = string
-
-  validation {
-    condition     = length(trimspace(var.aws_load_balancer_controller_chart_version)) > 0
-    error_message = "Set an approved AWS Load Balancer Controller chart version."
-  }
-}
-
 variable "argocd_chart_version" {
   description = "Pinned Argo CD Helm chart version"
   type        = string
   default     = "9.0.0"
-}
-
-variable "keda_chart_version" {
-  description = "Pinned KEDA Helm chart version"
-  type        = string
-  default     = "2.21.0"
 }
 
 variable "owner" {

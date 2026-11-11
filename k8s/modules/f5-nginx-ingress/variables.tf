@@ -18,6 +18,10 @@ variable "domain_suffix" {
   type = string
 }
 
+variable "load_balancer_scheme" {
+  type = string
+}
+
 variable "route53_zone_id" {
   type    = string
   default = ""
@@ -33,29 +37,16 @@ variable "acme_server" {
   default = "https://acme-staging-v02.api.letsencrypt.org/directory"
 }
 
-variable "grafana_admin_password" {
-  type      = string
-  sensitive = true
+variable "enable_tls" {
+  type = bool
 }
 
-variable "frontend_image" {
-  type    = string
-  default = "nginx:1.29.2-alpine"
+variable "frontend_enabled" {
+  type = bool
 }
 
-variable "frontend_replicas" {
-  type    = number
-  default = 2
-}
-
-variable "manage_cert_manager" {
-  type    = bool
-  default = true
-}
-
-variable "manage_route53_pod_identity" {
-  type    = bool
-  default = true
+variable "monitoring_enabled" {
+  type = bool
 }
 
 variable "f5_nginx_ingress_chart_version" {
@@ -63,12 +54,3 @@ variable "f5_nginx_ingress_chart_version" {
   default = "0.18.1"
 }
 
-variable "cert_manager_chart_version" {
-  type    = string
-  default = "1.17.2"
-}
-
-variable "kube_prometheus_stack_chart_version" {
-  type    = string
-  default = "93.1.1"
-}

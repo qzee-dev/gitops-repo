@@ -1,4 +1,4 @@
-resource "kubernetes_namespace" "keda" {
+resource "kubernetes_namespace" "this" {
   metadata {
     name = "keda"
 
@@ -12,14 +12,12 @@ resource "kubernetes_namespace" "keda" {
   }
 }
 
-resource "helm_release" "keda" {
+resource "helm_release" "this" {
   name       = "keda"
   repository = "https://kedacore.github.io/charts"
   chart      = "keda"
-  version    = var.keda_chart_version
-  namespace  = kubernetes_namespace.keda.metadata[0].name
-
-  create_namespace = false
+  version    = var.chart_version
+  namespace  = kubernetes_namespace.this.metadata[0].name
 
   set {
     name  = "crds.install"
@@ -30,7 +28,5 @@ resource "helm_release" "keda" {
     prevent_destroy = true
   }
 
-  depends_on = [
-    kubernetes_namespace.keda,
-  ]
+  depends_on = [kubernetes_namespace.this]
 }

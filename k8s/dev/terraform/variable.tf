@@ -54,10 +54,69 @@ variable "project_name" {
   default     = "fintech-platform"
 }
 
-variable "ingress_platform_enabled" {
-  description = "Enable the reusable ingress, DNS-01, monitoring, and sample frontend module"
-  type        = bool
-  default     = false
+variable "enable_pod_identity_agent" {
+  type    = bool
+  default = false
+}
+
+variable "enable_aws_load_balancer_controller" {
+  type    = bool
+  default = false
+}
+
+variable "aws_load_balancer_controller_chart_version" {
+  type    = string
+  default = "1.13.4"
+}
+
+variable "enable_keda" {
+  type    = bool
+  default = true
+}
+
+variable "cert_manager_chart_version" {
+  type    = string
+  default = "1.17.2"
+}
+
+variable "enable_monitoring" {
+  type    = bool
+  default = true
+}
+
+variable "kube_prometheus_stack_chart_version" {
+  type    = string
+  default = "93.1.1"
+}
+
+variable "enable_frontend" {
+  type    = bool
+  default = true
+}
+
+variable "ingress_load_balancer_scheme" {
+  type    = string
+  default = "internal"
+
+  validation {
+    condition     = contains(["internal", "internet-facing"], var.ingress_load_balancer_scheme)
+    error_message = "ingress_load_balancer_scheme must be internal or internet-facing."
+  }
+}
+
+variable "enable_argocd" {
+  type    = bool
+  default = false
+}
+
+variable "argocd_domain" {
+  type    = string
+  default = ""
+}
+
+variable "argocd_acm_certificate_arn" {
+  type    = string
+  default = ""
 }
 
 variable "ingress_controller" {
@@ -66,8 +125,8 @@ variable "ingress_controller" {
   default     = "f5-nginx"
 
   validation {
-    condition     = contains(["envoy", "nginx", "alb", "f5-nginx"], var.ingress_controller)
-    error_message = "ingress_controller must be envoy, nginx, alb, or f5-nginx."
+    condition     = contains(["none", "envoy", "nginx", "alb", "f5-nginx"], var.ingress_controller)
+    error_message = "ingress_controller must be none, envoy, nginx, alb, or f5-nginx."
   }
 }
 
@@ -77,19 +136,19 @@ variable "ingress_domain_suffix" {
   default     = ""
 }
 
-variable "ingress_route53_zone_id" {
+variable "route53_zone_id" {
   description = "Public Route 53 hosted zone ID used for DNS-01"
   type        = string
   default     = ""
 }
 
-variable "ingress_acme_email" {
+variable "acme_email" {
   description = "Operations email address registered with ACME"
   type        = string
   default     = ""
 }
 
-variable "ingress_acme_server" {
+variable "acme_server" {
   description = "ACME directory URL; defaults to Let's Encrypt staging"
   type        = string
   default     = "https://acme-staging-v02.api.letsencrypt.org/directory"
@@ -101,24 +160,13 @@ variable "ingress_alb_certificate_arn" {
   default     = ""
 }
 
-variable "ingress_alb_scheme" {
-  description = "ALB scheme when using the ALB controller"
-  type        = string
-  default     = "internal"
-
-  validation {
-    condition     = contains(["internal", "internet-facing"], var.ingress_alb_scheme)
-    error_message = "ingress_alb_scheme must be internal or internet-facing."
-  }
-}
-
-variable "ingress_manage_cert_manager" {
+variable "enable_cert_manager" {
   description = "Install cert-manager and manage the DNS-01 ClusterIssuer"
   type        = bool
   default     = true
 }
 
-variable "ingress_manage_route53_pod_identity" {
+variable "enable_route53_dns01" {
   description = "Create the cert-manager Route 53 IAM role and EKS Pod Identity association"
   type        = bool
   default     = true

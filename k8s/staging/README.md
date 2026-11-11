@@ -30,7 +30,9 @@ aws_region
 cluster_name
 vpc_id
 acm_certificate_arn
+argocd_acm_certificate_arn
 argocd_domain
+ingress_alb_certificate_arn (when ingress_controller = "alb")
 aws_load_balancer_controller_chart_version
 cost_center
 ```
@@ -44,9 +46,9 @@ tags support discovery by the selected AWS Load Balancer Controller version.
 ## Plan and apply
 
 Choose and review the AWS Load Balancer Controller chart version before
-planning. If Pod Identity, KEDA, or the controller already exists, import it
-into this root's state or reconcile ownership first; do not let Terraform
-replace an add-on managed by another stack.
+planning. If an add-on already exists, import it into this root's state or
+reconcile ownership first; do not let Terraform replace an add-on managed by
+another stack.
 
 ```bash
 cp backend.hcl.example backend.hcl
@@ -97,6 +99,14 @@ manifest repository should contain only
 `applicationset-staging.yaml` and `applicationset-production.yaml`.
 
 ## Ingress and Shared Add-ons
+
+The staging root uses the same selectable `modules/platform` composition as
+dev and production. Set add-on flags independently in the local tfvars file;
+`ingress_controller` selects exactly one of `none`, `envoy`, `nginx`,
+`f5-nginx`, or `alb`. NLB-backed controllers use the configurable
+`ingress_load_balancer_scheme`; ALB mode requires its own ACM certificate ARN.
+Ingress selection automatically includes the AWS Load Balancer Controller
+and Pod Identity Agent where required. The Argo CD ALB reuses that controller.
 
 The staging root selects one dedicated controller module using
 `ingress_controller`. Its default and checked-in example are `alb`. Supported
