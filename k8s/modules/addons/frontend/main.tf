@@ -1,6 +1,6 @@
 resource "helm_release" "this" {
   name             = "${var.environment}-frontend"
-  chart            = "${path.module}/../../ingress-platform/charts/frontend"
+  chart            = "${path.module}/../../charts/frontend"
   namespace        = var.app_namespace
   create_namespace = true
   wait             = true

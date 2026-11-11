@@ -32,7 +32,7 @@ resource "helm_release" "ingress_nginx" {
 
 resource "helm_release" "routes" {
   name             = "${var.environment}-nginx-routes"
-  chart            = "${path.module}/../ingress-platform/charts/routes"
+  chart            = "${path.module}/../charts/routes"
   namespace        = "edge-gateway"
   create_namespace = true
   wait             = true
@@ -47,7 +47,7 @@ resource "helm_release" "routes" {
       grafana    = "grafana.${var.domain_suffix}"
       prometheus = "prometheus.${var.domain_suffix}"
     }
-    frontend = { enabled = var.frontend_enabled }
+    frontend   = { enabled = var.frontend_enabled }
     monitoring = { enabled = var.monitoring_enabled }
     tlsEnabled = var.enable_tls
     issuer = {

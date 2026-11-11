@@ -1,223 +1,182 @@
-# Kubernetes platform and ingress controller implementation
+# Kubernetes platform
 
-This directory contains the Terraform and module structure for the Kubernetes platform add-ons and the environment-specific ingress controller choice.
+This directory configures add-ons and ingress on existing EKS clusters. It
+does not create clusters, VPCs, or worker nodes.
 
-## Architecture at a glance
+## Architecture
 
-This repository does not create a cluster or VPC. It assumes each environment already has an EKS cluster and AWS networking, then bootstraps the platform pieces that sit on top of it.
+```mermaid
+flowchart TD
+    Dev["k8s/dev/terraform"] --> DevPlatform["Platform call<br/>dev inputs"]
+    Staging["k8s/staging/terraform"] --> StagePlatform["Platform call<br/>staging inputs"]
+    Production["k8s/production/terraform"] --> ProdPlatform["Platform call<br/>production inputs"]
 
-The design is intentionally split into two layers:
+    Dev --> DevState["Dev S3 state"]
+    Staging --> StageState["Staging S3 state"]
+    Production --> ProdState["Production S3 state"]
 
-- Shared platform layer: Pod Identity, AWS Load Balancer Controller, cert-manager, monitoring, KEDA, sample frontend, and optional Argo CD
-- Environment-specific ingress layer: exactly one ingress controller per environment (`envoy`, `nginx`, `f5-nginx`, or `alb`)
+    DevPlatform --> DevResources["Enabled add-ons<br/>+ 0 or 1 ingress"]
+    StagePlatform --> StageResources["Enabled add-ons<br/>+ 0 or 1 ingress"]
+    ProdPlatform --> ProdResources["Enabled add-ons<br/>+ 0 or 1 ingress"]
+    DevResources --> DevCluster["Existing dev EKS"]
+    StageResources --> StageCluster["Existing staging EKS"]
+    ProdResources --> ProdCluster["Existing production EKS"]
 
-The key idea is that a cluster can keep one shared AWS integration stack while each environment chooses the application-facing ingress it wants to run. In practice, the AWS Load Balancer Controller remains a shared platform dependency even when the environment uses an NLB-backed ingress because Kubernetes Services and ingress resources still depend on AWS load balancer reconciliation.
-
-### Shared composition pattern
-
-Each environment root calls the shared platform module in `k8s/modules/platform`:
-
-- `module "platform"` is the common composition entrypoint
-- it evaluates `local.needs_aws_load_balancer_controller` and `local.needs_pod_identity_agent`
-- it installs the shared add-ons only when required
-- it leaves the application ingress choice to the environment root via `ingress_controller`
-
-### Why the AWS Load Balancer Controller is always in the platform path
-
-The AWS Load Balancer Controller is required for this architecture because it is the AWS integration that manages Kubernetes Service and Ingress resources backed by AWS load balancers.
-
-- ALB mode: required for AWS ALB Ingress reconciliation
-- NLB mode (`envoy`, `nginx`, `f5-nginx`): still required because the controller provisions the AWS NLB that fronts the ingress Service
-- Argo CD: required because its ALB is created through the same AWS controller integration
-
-That is why the module auto-enables it when an ingress is selected or when Argo CD is enabled, instead of treating it as a purely ALB-only feature.
-
-## Goal
-
-The platform is designed so that each environment selects its own application ingress controller explicitly instead of forcing all environments to use the same controller.
-
-Supported controller choices:
-
-- `envoy` – Envoy Gateway + Gateway API
-- `nginx` – ingress-nginx
-- `f5-nginx` – F5 NGINX Ingress
-- `alb` – AWS Load Balancer Controller
-
-The AWS Load Balancer Controller is a separate cluster integration. It is owned once by dev's base add-ons and by the Argo CD platform module in staging and production. It remains installed where needed for Argo CD ALBs and AWS-backed LoadBalancer Services; choosing Envoy, NGINX, or F5 does not remove that shared infrastructure add-on.
-
-## Environment controller policy
-
-Each environment root independently selects a controller:
-
-- Dev: `f5-nginx`
-- Staging: `alb`
-- Production: `envoy`
-
-The selection is controlled in each environment Terraform root and resolves to the matching dedicated module under `k8s/modules/`.
-
-## Add-on and ingress selection
-
-Each environment root calls the shared `modules/platform` composition module.
-Choose add-ons independently in that environment's ignored `terraform.tfvars`
-file, then select at most one ingress implementation:
-
-```hcl
-enable_keda                  = true
-enable_cert_manager          = true
-enable_route53_dns01         = true
-enable_monitoring            = true
-enable_frontend              = true
-enable_argocd                = false
-ingress_controller           = "f5-nginx"
-ingress_load_balancer_scheme = "internet-facing"
+    PlatformCode["Shared modules/platform source"] -.-> DevPlatform
+    PlatformCode -.-> StagePlatform
+    PlatformCode -.-> ProdPlatform
+    Charts["modules/charts source"] -.-> DevResources
+    Charts -.-> StageResources
+    Charts -.-> ProdResources
 ```
 
-Supported add-ons are the EKS Pod Identity Agent, AWS Load Balancer
-Controller, KEDA, cert-manager, monitoring, the sample frontend, and Argo CD.
-`ingress_controller` accepts `none`, `envoy`, `nginx`, `f5-nginx`, or `alb`.
-Selecting an ingress automatically enables the AWS Load Balancer Controller
-and Pod Identity Agent: the NLB-backed controllers need AWS load-balancer
-provisioning, while ALB Ingresses are reconciled by that same controller.
-Argo CD also requires the AWS Load Balancer Controller for its ALB.
+Each root passes environment-specific values to `modules/platform`. That
+composition module enables add-ons and at most one selected ingress. Focused
+modules under `modules/addons/` and the ingress modules implement those
+capabilities. Shared Helm charts live under `modules/charts/`.
 
-Envoy Gateway, ingress-nginx, and F5 NGINX expose their Service through an
-NLB; `ingress_load_balancer_scheme` chooses `internal` or `internet-facing`.
-ALB mode creates ALB Ingress resources and requires
-`ingress_alb_certificate_arn` for ACM TLS. NLB-based TLS is optional and
-requires cert-manager plus Route 53 DNS-01 values. Application DNS records
-must be created separately; DNS-01 only manages ACME validation records.
+Modules are code reuse, not state boundaries. Every resource created by a
+child module is stored in the state of the environment root that called it.
+Keep each cluster resource under one Terraform owner.
 
-Each root owns a separate Terraform state. Do not initialize one environment
-with another environment's backend key or let multiple roots manage the same
-cluster add-on. Review plans before changing selections, especially when
-switching ingress controllers.
+## Environment profiles
 
-## Directory structure
+| Environment | Ingress default | Argo CD |
+| --- | --- | --- |
+| Dev | `f5-nginx` | Disabled by default; dev application deployments use the manual release workflow |
+| Staging | `alb` | Enabled |
+| Production | `envoy` | Enabled |
 
-```text
-k8s/
-├── README.md
-├── dev/
-│   └── terraform/
-├── staging/
-│   └── terraform/
-├── production/
-│   └── terraform/
-└── modules/
-    ├── common/
-    ├── aws-alb-controller/
-    ├── envoy-gateway/
-    ├── f5-nginx-ingress/
-    ├── ingress-nginx/
-    └── ingress-platform/
+The ingress input accepts `none`, `envoy`, `nginx`, `f5-nginx`, or `alb`.
+Add-on flags (KEDA, cert-manager, Route 53 DNS-01, monitoring, frontend, and
+Argo CD) are configured separately in each root's local tfvars or through
+`TF_VAR_*`. The defaults differ by environment; see its README and
+`variables.tf`.
+
+## Derived dependencies and behavior
+
+`modules/platform/locals.tf` derives these dependencies:
+
+- The AWS Load Balancer Controller is installed if explicitly enabled, if
+  Argo CD is enabled, or if an ingress other than `none` is selected.
+- The EKS Pod Identity Agent is installed if explicitly enabled, if the AWS
+  Load Balancer Controller is needed, or if Route 53 DNS-01 is enabled.
+
+These are dependencies of the current integrations. ALB routes use the AWS
+Load Balancer Controller; the current Envoy, NGINX, and F5 NGINX modules also
+request AWS-managed NLBs through Kubernetes Services. They do not attach to
+an externally managed shared NLB.
+
+ALB ingress uses an ACM certificate. DNS-01 TLS for NLB-backed ingress
+requires cert-manager, Route 53 configuration, and an operations email.
+Application DNS records are managed separately from ACME validation records.
+Review plans carefully when disabling an add-on or changing ingress: with
+`count`, disabling a module removes its resources from that environment's
+configuration.
+
+## Using a network-owned shared NLB
+
+**This is not supported by the current Terraform configuration.** There is no
+setting that both turns off the AWS Load Balancer Controller and keeps the
+current ingress modules functional:
+
+- Setting `enable_aws_load_balancer_controller = false` does not disable it
+  while `ingress_controller != "none"` or `enable_argocd = true`; the
+  dependency is derived in `modules/platform/locals.tf`.
+- Setting `ingress_controller = "none"` removes the platform-managed
+  application ingress. It does not attach that ingress to an existing NLB.
+- Envoy, ingress-nginx, and F5 NGINX currently request a new NLB using a
+  Kubernetes `LoadBalancer` Service. The `alb` option creates ALB Ingress
+  resources reconciled by the AWS Load Balancer Controller.
+- Staging and production Argo CD also currently expose their server through
+  an AWS-LBC-managed ALB. Disabling the controller requires redesigning that
+  endpoint too, or disabling Argo CD.
+
+### Intended cross-environment scenario
+
+The shared NLB belongs to the network/shared-infrastructure owner. Each
+environment remains isolated: its Terraform root and state manage its own
+cluster add-ons, ingress gateway, Kubernetes Services, and application routes.
+The shared network layer manages the NLB listeners and a distinct target group
+for each environment. Traffic reaches the environment's ingress gateway, and
+that gateway routes to services in only its own cluster.
+
+```mermaid
+flowchart LR
+    Clients["Clients / DNS"] --> SharedNLB["Network-owned shared NLB"]
+    SharedNLB --> DevTG["Dev listener / target group"]
+    SharedNLB --> StageTG["Staging listener / target group"]
+    SharedNLB --> ProdTG["Production listener / target group"]
+
+    DevTG --> DevIngress["Dev ingress gateway<br/>dev cluster"]
+    StageTG --> StageIngress["Staging ingress gateway<br/>staging cluster"]
+    ProdTG --> ProdIngress["Production ingress gateway<br/>production cluster"]
+
+    DevTerraform["Dev Terraform root/state"] --> DevIngress
+    StageTerraform["Staging Terraform root/state"] --> StageIngress
+    ProdTerraform["Production Terraform root/state"] --> ProdIngress
+
+    DevIngress --> DevServices["Dev services"]
+    StageIngress --> StageServices["Staging services"]
+    ProdIngress --> ProdServices["Production services"]
 ```
 
-## Modules
+The diagram shows the desired ownership and traffic separation, not a feature
+already implemented here. A single NLB does not route on HTTP hostnames like
+an ALB. The network team and platform owners must choose how traffic selects
+an environment (for example, separate listener ports, or a separately
+designed shared Layer 7 proxy), and define TLS termination/SNI, target type,
+health checks, security rules, DNS, and target registration/removal. Do not
+assume DNS hostnames alone select separate NLB target groups.
 
-### common
+### Changes required before using this design
 
-Shared add-ons used across ingress implementations:
+Implement and test the integration before changing environment flags:
 
-- cert-manager
-- Route 53 DNS-01 IAM via EKS Pod Identity
-- kube-prometheus-stack
-- Grafana
-- Prometheus
-- sample frontend deployment
+1. Agree with the network owner on the shared NLB contract: environment
+   selection mechanism (listener ports or Layer 7 routing), target groups,
+   target type, health checks, TLS/certificate termination, security rules,
+   DNS, and ownership of target registration as nodes or pods change.
+2. Replace each selected ingress's AWS-created `LoadBalancer` Service with
+   an integration to its environment's shared-NLB target group. The target
+   registration method must not depend on the AWS Load Balancer Controller
+   if that controller is to be removed. `TargetGroupBinding` does not meet
+   that requirement because AWS Load Balancer Controller reconciles it.
+3. Replace ALB Ingress resources where needed. In particular, staging uses
+   ALB for application ingress and staging/production Argo CD currently use
+   ALB. Each must use the shared-NLB path or be disabled before AWS Load
+   Balancer Controller can be removed from that environment.
+4. Change `modules/platform/locals.tf` so the AWS Load Balancer Controller is
+   required only by remaining integrations that actually use it. Keep it
+   enabled in any environment that still has AWS-LBC-managed resources.
+5. Test each environment and review its own Terraform state and plan. Confirm
+   the network stack remains the only owner of the shared NLB and that plans
+   preserve ingress gateways, healthy targets, Argo CD (if retained), and
+   application endpoints.
 
-### aws-alb-controller
+Only after that implementation exists should an environment use a
+non-`none` ingress with `enable_aws_load_balancer_controller = false`. Until
+then, that setting does not avoid installation; setting `ingress_controller =
+"none"` avoids the current ingress path but leaves no Terraform-managed
+application ingress. The environment READMEs describe each environment's
+part in this proposed design.
 
-Creates ALB-backed sample routes using the shared routing chart. It reuses the AWS Load Balancer Controller already owned by the environment platform; it does not install a second copy.
+## State and generated files
 
-### envoy-gateway
+All three platform roots use separate S3 state keys configured through each
+root's ignored `backend.hcl`: `dev/terraform.tfstate`,
+`staging/terraform.tfstate`, and `production/terraform.tfstate`. Never
+initialize an environment with another environment's backend key. When
+migrating existing dev local state, back it up and use the procedure in the
+[runbook](../RUNBOOK.md#moving-existing-state-to-s3). Terraform's
+`.terraform/` directory, including `modules/modules.json`, is local generated
+cache metadata; it is not state or source configuration.
 
-Installs Envoy Gateway and creates Gateway API resources for the sample frontend and monitoring endpoints.
+The dev tree also contains `dev/terraform/ingress-dns01/`, a separate
+standalone ingress-nginx/cert-manager Terraform root. It has its own local
+state and is an alternative to the standard dev platform ingress, not an
+additional module in `modules/platform`. Do not run both roots against the
+same ingress, cert-manager, or Pod Identity resources.
 
-### f5-nginx-ingress
-
-Installs F5 NGINX Ingress and creates Ingress resources with the matching class name and TLS handling.
-
-### ingress-nginx
-
-Installs community ingress-nginx as an explicit controller option, keeping the older controller available alongside newer alternatives.
-
-### ingress-platform
-
-Legacy/shared routing chart used by the controller modules. It contains the shared route templates, certificate logic, and helper manifests.
-
-## Add-ons currently present
-
-The platform currently includes the following add-ons and capabilities:
-
-- AWS EKS Pod Identity integration
-- cert-manager for TLS certificate automation
-- Route 53 access for DNS-01 certificate validation
-- kube-prometheus-stack for monitoring
-- Grafana and Prometheus endpoints
-- sample frontend service deployment
-- optional ingress controller selection by environment
-- AWS ALB Controller support for ALB routing
-- Envoy Gateway API support
-- ingress-nginx and F5 NGINX options
-
-## Example implementation pattern
-
-Each environment root selects one module by changing the value of `ingress_controller`:
-
-```hcl
-ingress_controller = "envoy"
-```
-
-or
-
-```hcl
-ingress_controller = "alb"
-```
-
-or
-
-```hcl
-ingress_controller = "f5-nginx"
-```
-
-Each environment declares a module block with a literal source path for each supported controller and uses `count` to instantiate only the selected module. Terraform module sources cannot be computed from an input variable. For example:
-
-```hcl
-module "ingress_envoy" {
-    count  = var.ingress_controller == "envoy" ? 1 : 0
-    source = "../../modules/envoy-gateway"
-}
-```
-
-This pattern keeps the architecture explicit: one selected application ingress module per environment, with shared AWS load-balancer infrastructure managed separately.
-
-## Required values
-
-Each environment should define the following values before apply:
-
-- `cluster_name`
-- `aws_region`
-- `vpc_id`
-- `domain_suffix`
-- `route53_zone_id`
-- `grafana_admin_password`
-- `ingress_controller`
-- `ingress_load_balancer_scheme`
-- `enable_keda`, `enable_cert_manager`, `enable_route53_dns01`
-- `enable_monitoring`, `enable_frontend`, `enable_argocd`
-- `acme_email` (when using cert-manager)
-- `acme_server` (optional override)
-- `ingress_alb_certificate_arn` (for ALB mode)
-
-## Notes
-
-- Run `terraform fmt -check`, `terraform validate`, and review `terraform plan` from each environment root before applying.
-- The application routing design is intentionally one selected ingress module per environment; the shared AWS Load Balancer Controller may remain installed as infrastructure.
-- This makes it easier to operate, troubleshoot, and switch an environment to a different controller without breaking the rest of the platform.
-
-## Next steps
-
-1. Set the controller for each environment in the environment-specific `terraform.tfvars` files.
-2. Confirm Route 53 hosted zone and ACM certificate values where needed.
-3. Apply the environment Terraform roots in the normal deployment order.
-4. Validate the sample frontend, Grafana, and Prometheus endpoints through the selected controller.
+For initialization, plans, applications, and the one-time dev state address
+migration, see [`../RUNBOOK.md`](../RUNBOOK.md).

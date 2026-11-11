@@ -1,74 +1,79 @@
-# Fintech Platform GitOps and Infrastructure
+# Fintech platform infrastructure
 
-This repository contains shared ECR infrastructure and Kubernetes platform
-bootstrap configuration. Application Helm values and Argo CD sources are
-maintained in `qzee-dev/fintech-enterprise-gitops-manifest`.
+This repository owns shared ECR infrastructure and Kubernetes platform
+bootstrap for existing EKS clusters. Application source code is in
+[`qzee-dev/fintech-platform`](https://github.com/qzee-dev/fintech-platform);
+application Helm values and Argo CD ApplicationSets are in
+[`qzee-dev/fintech-enterprise-gitops-manifest`](https://github.com/qzee-dev/fintech-enterprise-gitops-manifest).
 
-For repository responsibilities, Terraform operation, prerequisites, and
-deployment handoffs, see the [infrastructure runbook](RUNBOOK.md).
+## How the system works
 
-## Components
+```mermaid
+flowchart LR
+    Source["fintech-platform<br/>build and release"] -->|"immutable image"| ECR["Shared ECR"]
+    ECR --> Dev["Dev deploy workflow<br/>verified image digest"]
+    Dev --> DevCluster["Existing dev EKS"]
 
-- [`Ecr-Repo`](Ecr-Repo/README.md) creates immutable `fintech-platform/<service>`
-	repositories in `us-east-1` and one OIDC release-publisher role for
-	`qzee-dev/fintech-platform` on `develop`.
-- [`k8s/dev/terraform`](k8s/dev/terraform) configures add-ons on an existing dev
-	EKS cluster: Pod Identity, AWS Load Balancer Controller, KEDA, and the
-	selected application ingress module. Dev application releases are deployed
-	manually by digest; this root does not install Argo CD.
-- [`k8s/README.md`](k8s/README.md) documents the current ingress-controller model,
-	shared add-ons, and the per-environment controller selection design.
-- [`k8s/staging/terraform`](k8s/staging/terraform) and
-	[`k8s/production/terraform`](k8s/production/terraform) install the same
-	required platform add-ons and the intended Argo CD instances on existing
-	environment clusters. Each root independently selects one application
-	ingress module; the AWS Load Balancer Controller remains a shared platform
-	dependency for Argo CD ALBs and AWS-backed Services.
-- Application values live in the enterprise manifest repository. Separate
-	staging and production ApplicationSets generate
-	`<environment>-<service>` applications on their respective clusters.
-	Dev releases use the source repository's manual deployment workflow. See
-	[RUNBOOK.md](RUNBOOK.md) for deployment and environment responsibilities.
+    Source -->|"promotion updates values"| GitOps["Enterprise GitOps manifests"]
+    GitOps --> StageCD["Staging Argo CD"]
+    GitOps --> ProdCD["Production Argo CD"]
+    StageCD --> StageCluster["Existing staging EKS"]
+    ProdCD --> ProdCluster["Existing production EKS"]
 
-## Kubernetes architecture overview
+    DevRoot["Dev Terraform root"] --> DevPlatform["Platform composition<br/>dev inputs"]
+    StageRoot["Staging Terraform root"] --> StagePlatform["Platform composition<br/>staging inputs"]
+    ProdRoot["Production Terraform root"] --> ProdPlatform["Platform composition<br/>production inputs"]
+    DevRoot --> DevState["Dev S3 state"]
+    StageRoot --> StageState["Staging S3 state"]
+    ProdRoot --> ProdState["Production S3 state"]
+    DevPlatform --> DevAddons["Enabled add-ons"]
+    DevPlatform --> DevIngress["One selected ingress"]
+    StagePlatform --> StageAddons["Enabled add-ons"]
+    StagePlatform --> StageIngress["One selected ingress"]
+    ProdPlatform --> ProdAddons["Enabled add-ons"]
+    ProdPlatform --> ProdIngress["One selected ingress"]
+    DevAddons --> DevCluster
+    DevIngress --> DevCluster
+    StageAddons --> StageCluster
+    StageIngress --> StageCluster
+    ProdAddons --> ProdCluster
+    ProdIngress --> ProdCluster
+    PlatformCode["Shared modules/platform source"] -.-> DevPlatform
+    PlatformCode -.-> StagePlatform
+    PlatformCode -.-> ProdPlatform
+```
 
-The platform is organized as a shared base layer plus an environment-specific ingress layer:
+Each environment root configures only its existing cluster. The roots reuse
+Terraform module code, but each owns its own inputs and state. Child modules
+do not create separate state files: their resources are tracked by the root
+that calls them.
 
-- `k8s/modules/platform` composes the cluster-wide capabilities that are shared across environments
-- `k8s/modules/<ingress-controller>` contains the selected ingress implementation for that environment
-- each environment root chooses one ingress controller through `ingress_controller`
-- AWS Load Balancer Controller is not optional in the current design when an environment exposes workload traffic through AWS-managed load balancers
+| Environment | Ingress default | Application deployment |
+| --- | --- | --- |
+| Dev | `f5-nginx` | Manually dispatched workflow deploys a verified image digest to an existing Deployment |
+| Staging | `alb` | Staging Argo CD syncs the staging ApplicationSet |
+| Production | `envoy` | Production Argo CD syncs the production ApplicationSet after approval |
 
-The environment policy is:
+## Repository map
 
-- Dev: `f5-nginx`
-- Staging: `alb`
-- Production: `envoy`
+- [`Ecr-Repo/`](Ecr-Repo/README.md): immutable ECR repositories and the source
+  repository's image-publisher role.
+- [`k8s/README.md`](k8s/README.md): Kubernetes module design, ingress choices,
+  add-on dependencies, and state ownership.
+- [`k8s/dev/README.md`](k8s/dev/README.md),
+  [`k8s/staging/README.md`](k8s/staging/README.md), and
+  [`k8s/production/README.md`](k8s/production/README.md): environment inputs
+  and Terraform commands.
+- `k8s/dev/terraform/ingress-dns01/`: a separate, optional dev ingress root;
+  it is not part of the standard `modules/platform` deployment.
+- [`RUNBOOK.md`](RUNBOOK.md): release integration, Terraform operations, and
+  safe state/plan procedures.
 
-This keeps the shared AWS integration stable while allowing each cluster to run its own supported ingress pattern. For a complete operational explanation, see [k8s/README.md](k8s/README.md) and [RUNBOOK.md](RUNBOOK.md).
+## State and ownership
 
-## Release and Promotion Flow
-
-1. The fintech release workflow builds/scans a service image, pushes an
-	 immutable service-version-commit tag, captures its digest, and uploads
-	 release metadata.
-2. The dev workflow deploys the selected digest directly to the `dev`
-	 namespace. Dev values in the enterprise manifest repository are not
-	 watched by Argo CD.
-3. Staging and production promotion workflows update the relevant values file
-	 in `qzee-dev/fintech-enterprise-gitops-manifest`, commit it, and verify
-	 Argo CD sync.
-
-Configure `GITOPS_REPOSITORY=qzee-dev/fintech-enterprise-gitops-manifest` and
-`GITOPS_REPOSITORY_NAME=fintech-enterprise-gitops-manifest` in the source
-repository's staging and production GitHub Environments. The GitHub App must
-have contents-write access to that repository.
-
-## Required FinOps Tags
-
-Use the keys `Owner`, `ManagedBy`, `Environment`, `CostCenter`, and `Project` on
-AWS resources. Add `Service` and `Component` where applicable. ECR repositories
-use `Environment=shared`; dev platform resources use `Environment=dev`; staging
-and production manifests must use their respective environment values. The
-finance-approved `CostCenter` value is required input, not a placeholder to
-deploy.
+Dev, staging, and production use separate S3 backend keys. Always run
+Terraform from the intended environment root and do not let multiple roots
+manage the same cluster add-on or release. Existing dev local state must be
+migrated to the dev S3 key as described in the [runbook](RUNBOOK.md). The
+cluster, VPC, and worker nodes are owned by other infrastructure; this
+repository bootstraps add-ons and ingress only.
