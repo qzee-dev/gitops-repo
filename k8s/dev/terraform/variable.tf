@@ -84,6 +84,71 @@ variable "enable_monitoring" {
   default = true
 }
 
+variable "enable_efk" {
+  type    = bool
+  default = false
+}
+
+variable "eck_operator_chart_version" {
+  type    = string
+  default = "3.5.0"
+}
+
+variable "elasticsearch_version" {
+  type    = string
+  default = "9.5.6"
+}
+
+variable "elasticsearch_node_count" {
+  type    = number
+  default = 1
+}
+
+variable "elasticsearch_storage_size" {
+  type    = string
+  default = "20Gi"
+}
+
+variable "elasticsearch_storage_class" {
+  type    = string
+  default = ""
+}
+
+variable "elasticsearch_cpu" {
+  type    = string
+  default = "2"
+}
+
+variable "elasticsearch_memory" {
+  type    = string
+  default = "4Gi"
+}
+
+variable "kibana_cpu" {
+  type    = string
+  default = "500m"
+}
+
+variable "kibana_memory" {
+  type    = string
+  default = "1Gi"
+}
+
+variable "fluent_bit_chart_version" {
+  type    = string
+  default = "0.58.3"
+}
+
+variable "log_retention_days" {
+  type    = number
+  default = 14
+}
+
+variable "kibana_hostname" {
+  type    = string
+  default = ""
+}
+
 variable "kube_prometheus_stack_chart_version" {
   type    = string
   default = "93.1.1"
@@ -134,6 +199,16 @@ variable "ingress_domain_suffix" {
   description = "DNS suffix for ingress endpoints, such as dev.example.com"
   type        = string
   default     = ""
+}
+
+variable "grafana_hostname" {
+  description = "Fully qualified hostname for the dev Grafana endpoint"
+  type        = string
+}
+
+variable "prometheus_hostname" {
+  description = "Fully qualified hostname for the dev Prometheus endpoint"
+  type        = string
 }
 
 variable "route53_zone_id" {

@@ -18,6 +18,21 @@ spec:
             region: {{ .Values.issuer.region | quote }}
             hostedZoneID: {{ .Values.issuer.hostedZoneID | quote }}
 {{- end }}
+{{- if and .Values.issuer.create .Values.logging.enabled (or (eq .Values.controller "nginx") (eq .Values.controller "f5-nginx")) }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: logging-kibana
+  namespace: logging
+spec:
+  secretName: logging-kibana-tls
+  issuerRef:
+    name: {{ .Values.issuer.name }}
+    kind: ClusterIssuer
+  dnsNames:
+    - {{ .Values.logging.kibanaHostname | quote }}
+{{- end }}
 {{- if and .Values.issuer.create (eq .Values.controller "envoy") }}
 ---
 apiVersion: cert-manager.io/v1
@@ -34,6 +49,7 @@ spec:
     - {{ printf "*.%s" .Values.domainSuffix | quote }}
     - {{ .Values.domainSuffix | quote }}
 {{- else if and .Values.issuer.create (or (eq .Values.controller "nginx") (eq .Values.controller "f5-nginx")) }}
+{{- if .Values.monitoring.enabled }}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -48,6 +64,7 @@ spec:
   dnsNames:
     - {{ printf "*.%s" .Values.domainSuffix | quote }}
     - {{ .Values.domainSuffix | quote }}
+{{- end }}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate

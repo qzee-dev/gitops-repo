@@ -44,11 +44,16 @@ resource "helm_release" "routes" {
     domainSuffix = var.domain_suffix
     hostnames = {
       frontend   = "app.${var.domain_suffix}"
-      grafana    = "grafana.${var.domain_suffix}"
-      prometheus = "prometheus.${var.domain_suffix}"
+      grafana    = var.grafana_hostname
+      prometheus = var.prometheus_hostname
     }
     frontend   = { enabled = var.frontend_enabled }
     monitoring = { enabled = var.monitoring_enabled }
+    logging = {
+      enabled        = var.logging_enabled
+      kibanaHostname = var.kibana_hostname
+      kibanaService  = "kibana-kb-http"
+    }
     tlsEnabled = var.enable_tls
     issuer = {
       create       = var.enable_tls

@@ -1,0 +1,101 @@
+mode: deployment
+replicaCount: 2
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+command:
+  name: otelcol-contrib
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+service:
+  type: ClusterIP
+
+ports:
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+  prometheus:
+    enabled: true
+    containerPort: 8889
+    servicePort: 8889
+    protocol: TCP
+
+serviceMonitor:
+  enabled: false
+
+extraEnvs:
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: service.namespace=fintech-platform,deployment.environment.name=${environment}
+
+alternateConfig:
+  extensions:
+    health_check:
+      endpoint: $${env:MY_POD_IP}:13133
+
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+  processors:
+    memory_limiter:
+      limit_mib: 256
+      spike_limit_mib: 64
+    batch:
+      send_batch_size: 8192
+      timeout: 5s
+    resourcedetection:
+      detectors: [env, system]
+      timeout: 2s
+    resource:
+      attributes:
+        - key: service.namespace
+          action: upsert
+          value: fintech-platform
+        - key: deployment.environment.name
+          action: upsert
+          value: ${environment}
+
+  exporters:
+    prometheus:
+      endpoint: 0.0.0.0:8889
+      namespace: fintech_platform
+      resource_to_telemetry_conversion:
+        enabled: true
+      const_labels:
+        platform: k8s
+        environment: ${environment}
+    otlp:
+      endpoint: tempo.monitoring.svc.cluster.local:4317
+      tls:
+        insecure: true
+
+  service:
+    extensions: [health_check]
+    telemetry:
+      metrics:
+        address: $${env:MY_POD_IP}:8888
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, resourcedetection, resource, batch]
+        exporters: [otlp]
+      metrics:
+        receivers: [otlp]
+        processors: [memory_limiter, resource, batch]
+        exporters: [prometheus]

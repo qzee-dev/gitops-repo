@@ -54,6 +54,108 @@ that calls them.
 | Staging | `alb` | Staging Argo CD syncs the staging ApplicationSet |
 | Production | `envoy` | Production Argo CD syncs the production ApplicationSet after approval |
 
+## Observability and telemetry flow
+
+This repo is the platform layer for the fintech stack. It provides the Kubernetes
+and monitoring foundation, while the application repo emits the actual service
+telemetry. The expected flow is:
+
+```mermaid
+flowchart LR
+  App[fintech-platform services] -->|OTLP traces and metrics| OTel[OpenTelemetry Collector]
+    OTel -->|traces| Tempo[Tempo]
+    OTel -->|metrics| Prom[Prometheus]
+  App -->|JSON stdout/stderr| Fluent[Fluent Bit]
+  Fluent -->|TLS| ES[Elasticsearch]
+    Prom --> Grafana[Grafana]
+  Grafana -->|Tempo datasource| Tempo
+    ES --> Kibana[Kibana]
+```
+
+The platform repo owns:
+
+- Prometheus scraping and chart-provided alert rules
+- Grafana with Prometheus and Tempo datasources
+- OpenTelemetry Collector deployment
+- Tempo deployment for trace storage
+- Elasticsearch, Kibana, and Fluent Bit
+- ingress and routing for Grafana, Prometheus, and Kibana
+
+The application repo owns:
+
+- service-level OpenTelemetry initialization
+- trace generation for HTTP, DB, cache, and Kafka flows
+- OTLP traces and metrics sent to the in-cluster Collector
+- structured JSON logs with trace IDs written to stdout/stderr
+
+Application logs do not go through the Collector: Fluent Bit reads container
+stdout/stderr and sends JSON records to Elasticsearch. Set
+`OTEL_LOGS_EXPORTER=none`; this platform does not export OTLP logs. The
+Collector's OTLP endpoints are cluster-internal, and browser telemetry has no
+public endpoint configured. See the [observability contract](docs/OBSERVABILITY.md)
+and [monitoring runbook](RUNBOOK.md#monitoring-and-observability-operations)
+before wiring a new service.
+
+## Service instrumentation contract
+
+The app services are expected to emit:
+
+- HTTP server/client spans
+- database spans for PostgreSQL queries
+- Kafka producer/consumer spans for transaction, fraud, notification, and DLQ flows
+- external API spans for bank transfer simulation and notification providers
+- log entries that contain service.name, trace_id, span_id, and request metadata
+- Prometheus counters/histograms for request latency, transaction attempts, failures, and queue depth
+
+### Service classes and expected metrics
+
+| Service | Primary telemetry | Notes |
+| --- | --- | --- |
+| api-gateway | HTTP request duration, downstream call latencies, auth failures | entrypoint for user traffic |
+| user-service | auth attempts, DB query latency, profile updates | user lifecycle and login flow |
+| wallet-service | wallet operations, balance reads, DB writes | ledger-adjacent monitoring |
+| transaction-service | transaction attempts, success/failure, Kafka publish latency | workflow coordinator |
+| payment-service | bank-transfer attempts, validation calls, latency | external provider integration |
+| fraud-service | fraud checks, alerts, Kafka event handling | asynchronous decisioning |
+| notification-service | email/SMS delivery attempts, Kafka processing time | event-driven notifications |
+| ledger-service | ledger write latency, balance-sync calls | accounting and settlement |
+| dlq-processor | dead-letter retry counts, processing duration | reliability and recovery |
+| nibss-mock | external mock-bank HTTP latency and validations | test bank emulator |
+| web | frontend API latency, page rendering, browser failures | end-user experience |
+
+## Ingress and monitoring endpoints
+
+Each environment's tfvars configures its own ingress domain and enabled
+features. The routes chart creates Kubernetes routes for the frontend at
+`app.<ingress_domain_suffix>` and, when monitoring is enabled, Grafana and
+Prometheus at `grafana.<ingress_domain_suffix>` and
+`prometheus.<ingress_domain_suffix>`. Dev can set explicit Grafana and
+Prometheus hostnames in its tracked tfvars; staging and production derive
+them from their ingress suffix.
+
+Terraform creates the routes, not the application DNS records. DNS records
+must be created separately to point each hostname at that environment's
+ingress load balancer. Route 53 DNS-01 is used for certificate validation and
+does not create those application records. See the [runbook](RUNBOOK.md) and
+[dev guide](k8s/dev/README.md) for input requirements, TLS, and endpoint
+details.
+
+## EFK logging
+
+The Kubernetes platform includes an isolated Fluent Bit, Elasticsearch, and
+Kibana stack for each EKS environment. Elastic ECK manages Elasticsearch and
+Kibana; Fluent Bit collects container logs and sends them to that environment's
+Elasticsearch. The current rollout enables EFK in dev for validation, with
+staging and production configured but disabled pending approval.
+
+Kibana is routed at `kibana.<ingress_domain_suffix>`; DNS records are managed
+separately. The default retention is 14 days. Elasticsearch snapshots and
+restore are not configured by this repository, so plan and test backups before
+enabling the stack in staging or production. See the
+[Kubernetes EFK design](k8s/README.md#efk-logging) and the
+[EFK operations runbook](RUNBOOK.md#efk-logging-operations) for capacity,
+deployment, access, and verification steps.
+
 ## Repository map
 
 - [`Ecr-Repo/`](Ecr-Repo/README.md): immutable ECR repositories and the source
@@ -68,6 +170,8 @@ that calls them.
   it is not part of the standard `modules/platform` deployment.
 - [`RUNBOOK.md`](RUNBOOK.md): release integration, Terraform operations, and
   safe state/plan procedures.
+- [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md): platform-level telemetry
+  design, PromQL guidance, and service coverage status.
 
 ## State and ownership
 

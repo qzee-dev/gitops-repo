@@ -67,6 +67,33 @@ spec:
                 port:
                   number: 9090
 {{- end }}
+{{- if .Values.logging.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kibana-{{ .Values.controller }}
+  namespace: logging
+spec:
+  ingressClassName: {{ $className }}
+  {{- if .Values.tlsEnabled }}
+  tls:
+    - hosts:
+        - {{ .Values.logging.kibanaHostname | quote }}
+      secretName: logging-kibana-tls
+  {{- end }}
+  rules:
+    - host: {{ .Values.logging.kibanaHostname | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.logging.kibanaService }}
+                port:
+                  number: 5601
+{{- end }}
 {{- else if eq .Values.controller "alb" }}
 {{- if .Values.frontend.enabled }}
 apiVersion: networking.k8s.io/v1
@@ -132,5 +159,33 @@ spec:
                 name: kube-prometheus-stack-prometheus
                 port:
                   number: 9090
+{{- end }}
+{{- if .Values.logging.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kibana-{{ .Values.controller }}
+  namespace: logging
+  annotations:
+    alb.ingress.kubernetes.io/group.name: {{ .Values.alb.groupName | quote }}
+    alb.ingress.kubernetes.io/scheme: {{ .Values.alb.scheme | quote }}
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.alb.certificateArn | quote }}
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+spec:
+  ingressClassName: alb
+  rules:
+    - host: {{ .Values.logging.kibanaHostname | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.logging.kibanaService }}
+                port:
+                  number: 5601
 {{- end }}
 {{- end }}

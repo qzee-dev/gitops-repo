@@ -18,6 +18,14 @@ variable "domain_suffix" {
   type = string
 }
 
+variable "grafana_hostname" {
+  type = string
+}
+
+variable "prometheus_hostname" {
+  type = string
+}
+
 variable "load_balancer_scheme" {
   type = string
 }
@@ -49,8 +57,15 @@ variable "monitoring_enabled" {
   type = bool
 }
 
+variable "logging_enabled" {
+  type = bool
+}
+
+variable "kibana_hostname" {
+  type = string
+}
+
 variable "envoy_gateway_chart_version" {
   type    = string
   default = "v1.10.0"
 }
-

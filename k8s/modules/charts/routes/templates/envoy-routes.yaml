@@ -59,6 +59,25 @@ spec:
         - name: kube-prometheus-stack-prometheus
           port: 9090
 {{- end }}
+{{- if .Values.logging.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kibana-{{ .Values.controller }}
+  namespace: logging
+spec:
+  parentRefs:
+    - name: edge
+      namespace: edge-gateway
+      sectionName: {{ $sectionName }}
+  hostnames:
+    - {{ .Values.logging.kibanaHostname | quote }}
+  rules:
+    - backendRefs:
+        - name: {{ .Values.logging.kibanaService }}
+          port: 5601
+{{- end }}
 {{- if and .Values.tlsEnabled .Values.frontend.enabled }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
@@ -95,6 +114,27 @@ spec:
   hostnames:
     - {{ .Values.hostnames.grafana | quote }}
     - {{ .Values.hostnames.prometheus | quote }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+{{- end }}
+{{- if and .Values.tlsEnabled .Values.logging.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kibana-http-redirect-{{ .Values.controller }}
+  namespace: logging
+spec:
+  parentRefs:
+    - name: edge
+      namespace: edge-gateway
+      sectionName: http
+  hostnames:
+    - {{ .Values.logging.kibanaHostname | quote }}
   rules:
     - filters:
         - type: RequestRedirect

@@ -11,6 +11,10 @@ frontend:
   enabled: true
 monitoring:
   enabled: true
+logging:
+  enabled: false
+  kibanaHostname: kibana.example.invalid
+  kibanaService: kibana-kb-http
 issuer:
   create: true
   name: letsencrypt-dns01

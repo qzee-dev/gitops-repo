@@ -10,6 +10,14 @@ variable "domain_suffix" {
   type = string
 }
 
+variable "grafana_hostname" {
+  type = string
+}
+
+variable "prometheus_hostname" {
+  type = string
+}
+
 variable "certificate_arn" {
   type    = string
   default = ""
@@ -26,4 +34,12 @@ variable "frontend_enabled" {
 
 variable "monitoring_enabled" {
   type = bool
+}
+
+variable "logging_enabled" {
+  type = bool
+}
+
+variable "kibana_hostname" {
+  type = string
 }

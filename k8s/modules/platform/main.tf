@@ -13,6 +13,23 @@ resource "terraform_data" "validate_config" {
     }
 
     precondition {
+      condition = !var.enable_monitoring || var.ingress_controller == "none" || (
+        endswith(local.grafana_hostname, var.ingress_domain_suffix) &&
+        endswith(local.prometheus_hostname, var.ingress_domain_suffix)
+      )
+      error_message = "Grafana and Prometheus hostnames must use ingress_domain_suffix."
+    }
+
+    precondition {
+      condition = !var.enable_efk || (
+        var.ingress_controller != "none" &&
+        length(trimspace(var.ingress_domain_suffix)) > 0 &&
+        endswith(local.kibana_hostname, var.ingress_domain_suffix)
+      )
+      error_message = "EFK requires an ingress controller and a Kibana hostname beneath ingress_domain_suffix."
+    }
+
+    precondition {
       condition     = var.ingress_controller != "alb" || length(trimspace(var.ingress_alb_certificate_arn)) > 0
       error_message = "ALB ingress requires an ACM certificate ARN."
     }
@@ -43,9 +60,9 @@ module "aws_load_balancer_controller" {
   count  = local.needs_aws_load_balancer_controller ? 1 : 0
   source = "../addons/aws-load-balancer-controller"
 
-  cluster_name = var.cluster_name
-  aws_region   = var.aws_region
-  vpc_id       = var.vpc_id
+  cluster_name  = var.cluster_name
+  aws_region    = var.aws_region
+  vpc_id        = var.vpc_id
   chart_version = var.aws_load_balancer_controller_chart_version
   tags          = local.common_tags
 
@@ -56,10 +73,10 @@ module "keda" {
   count  = var.enable_keda ? 1 : 0
   source = "../addons/keda"
 
-  environment = var.environment
-  owner       = var.owner
-  cost_center = var.cost_center
-  project_name = var.project_name
+  environment   = var.environment
+  owner         = var.owner
+  cost_center   = var.cost_center
+  project_name  = var.project_name
   chart_version = var.keda_chart_version
 
   depends_on = [terraform_data.validate_config]
@@ -69,12 +86,12 @@ module "cert_manager" {
   count  = var.enable_cert_manager ? 1 : 0
   source = "../addons/cert-manager"
 
-  environment         = var.environment
-  cluster_name        = var.cluster_name
-  chart_version       = var.cert_manager_chart_version
+  environment          = var.environment
+  cluster_name         = var.cluster_name
+  chart_version        = var.cert_manager_chart_version
   enable_route53_dns01 = var.enable_route53_dns01
-  route53_zone_id     = var.route53_zone_id
-  tags                = local.common_tags
+  route53_zone_id      = var.route53_zone_id
+  tags                 = local.common_tags
 
   depends_on = [terraform_data.validate_config, module.pod_identity_agent]
 }
@@ -83,8 +100,29 @@ module "monitoring" {
   count  = var.enable_monitoring ? 1 : 0
   source = "../addons/monitoring"
 
+  environment            = var.environment
   chart_version          = var.kube_prometheus_stack_chart_version
   grafana_admin_password = var.grafana_admin_password
+
+  depends_on = [terraform_data.validate_config]
+}
+
+module "logging" {
+  count  = var.enable_efk ? 1 : 0
+  source = "../addons/logging"
+
+  environment                 = var.environment
+  eck_operator_chart_version  = var.eck_operator_chart_version
+  elasticsearch_version       = var.elasticsearch_version
+  elasticsearch_node_count    = var.elasticsearch_node_count
+  elasticsearch_storage_size  = var.elasticsearch_storage_size
+  elasticsearch_storage_class = var.elasticsearch_storage_class
+  elasticsearch_cpu           = var.elasticsearch_cpu
+  elasticsearch_memory        = var.elasticsearch_memory
+  kibana_cpu                  = var.kibana_cpu
+  kibana_memory               = var.kibana_memory
+  fluent_bit_chart_version    = var.fluent_bit_chart_version
+  retention_days              = var.log_retention_days
 
   depends_on = [terraform_data.validate_config]
 }
@@ -93,7 +131,7 @@ module "frontend" {
   count  = var.enable_frontend ? 1 : 0
   source = "../addons/frontend"
 
-  environment  = var.environment
+  environment   = var.environment
   app_namespace = var.app_namespace
   image         = var.frontend_image
   replicas      = var.frontend_replicas
@@ -124,6 +162,8 @@ module "ingress_envoy" {
   aws_region           = var.aws_region
   app_namespace        = var.app_namespace
   domain_suffix        = var.ingress_domain_suffix
+  grafana_hostname     = local.grafana_hostname
+  prometheus_hostname  = local.prometheus_hostname
   load_balancer_scheme = var.ingress_load_balancer_scheme
   route53_zone_id      = var.route53_zone_id
   acme_email           = var.acme_email
@@ -131,8 +171,10 @@ module "ingress_envoy" {
   enable_tls           = var.enable_cert_manager && var.enable_route53_dns01
   frontend_enabled     = var.enable_frontend
   monitoring_enabled   = var.enable_monitoring
+  logging_enabled      = var.enable_efk
+  kibana_hostname      = local.kibana_hostname
 
-  depends_on = [terraform_data.validate_config, module.aws_load_balancer_controller, module.cert_manager, module.frontend, module.monitoring]
+  depends_on = [terraform_data.validate_config, module.aws_load_balancer_controller, module.cert_manager, module.frontend, module.monitoring, module.logging]
 }
 
 module "ingress_nginx" {
@@ -144,6 +186,8 @@ module "ingress_nginx" {
   aws_region           = var.aws_region
   app_namespace        = var.app_namespace
   domain_suffix        = var.ingress_domain_suffix
+  grafana_hostname     = local.grafana_hostname
+  prometheus_hostname  = local.prometheus_hostname
   load_balancer_scheme = var.ingress_load_balancer_scheme
   route53_zone_id      = var.route53_zone_id
   acme_email           = var.acme_email
@@ -151,8 +195,10 @@ module "ingress_nginx" {
   enable_tls           = var.enable_cert_manager && var.enable_route53_dns01
   frontend_enabled     = var.enable_frontend
   monitoring_enabled   = var.enable_monitoring
+  logging_enabled      = var.enable_efk
+  kibana_hostname      = local.kibana_hostname
 
-  depends_on = [terraform_data.validate_config, module.aws_load_balancer_controller, module.cert_manager, module.frontend, module.monitoring]
+  depends_on = [terraform_data.validate_config, module.aws_load_balancer_controller, module.cert_manager, module.frontend, module.monitoring, module.logging]
 }
 
 module "ingress_f5_nginx" {
@@ -164,6 +210,8 @@ module "ingress_f5_nginx" {
   aws_region           = var.aws_region
   app_namespace        = var.app_namespace
   domain_suffix        = var.ingress_domain_suffix
+  grafana_hostname     = local.grafana_hostname
+  prometheus_hostname  = local.prometheus_hostname
   load_balancer_scheme = var.ingress_load_balancer_scheme
   route53_zone_id      = var.route53_zone_id
   acme_email           = var.acme_email
@@ -171,23 +219,29 @@ module "ingress_f5_nginx" {
   enable_tls           = var.enable_cert_manager && var.enable_route53_dns01
   frontend_enabled     = var.enable_frontend
   monitoring_enabled   = var.enable_monitoring
+  logging_enabled      = var.enable_efk
+  kibana_hostname      = local.kibana_hostname
 
-  depends_on = [terraform_data.validate_config, module.aws_load_balancer_controller, module.cert_manager, module.frontend, module.monitoring]
+  depends_on = [terraform_data.validate_config, module.aws_load_balancer_controller, module.cert_manager, module.frontend, module.monitoring, module.logging]
 }
 
 module "ingress_alb" {
   count  = var.ingress_controller == "alb" ? 1 : 0
   source = "../aws-alb-controller"
 
-  environment        = var.environment
-  app_namespace      = var.app_namespace
-  domain_suffix      = var.ingress_domain_suffix
-  certificate_arn    = var.ingress_alb_certificate_arn
-  alb_scheme         = var.ingress_load_balancer_scheme
-  frontend_enabled   = var.enable_frontend
-  monitoring_enabled = var.enable_monitoring
+  environment         = var.environment
+  app_namespace       = var.app_namespace
+  domain_suffix       = var.ingress_domain_suffix
+  grafana_hostname    = local.grafana_hostname
+  prometheus_hostname = local.prometheus_hostname
+  certificate_arn     = var.ingress_alb_certificate_arn
+  alb_scheme          = var.ingress_load_balancer_scheme
+  frontend_enabled    = var.enable_frontend
+  monitoring_enabled  = var.enable_monitoring
+  logging_enabled     = var.enable_efk
+  kibana_hostname     = local.kibana_hostname
 
-  depends_on = [terraform_data.validate_config, module.aws_load_balancer_controller, module.frontend, module.monitoring]
+  depends_on = [terraform_data.validate_config, module.aws_load_balancer_controller, module.frontend, module.monitoring, module.logging]
 }
 
 output "enabled_addons" {
@@ -197,6 +251,7 @@ output "enabled_addons" {
     var.enable_keda ? "keda" : "",
     var.enable_cert_manager ? "cert-manager" : "",
     var.enable_monitoring ? "monitoring" : "",
+    var.enable_efk ? "efk" : "",
     var.enable_frontend ? "frontend" : "",
     var.ingress_controller != "none" ? var.ingress_controller : "",
     var.enable_argocd ? "argocd" : "",

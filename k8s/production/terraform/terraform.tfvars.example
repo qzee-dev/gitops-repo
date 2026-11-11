@@ -1,21 +1,59 @@
-aws_region                        = "REPLACE_WITH_PRODUCTION_AWS_REGION"
-cluster_name                      = "REPLACE_WITH_PRODUCTION_EKS_CLUSTER_NAME"
-vpc_id                            = "REPLACE_WITH_PRODUCTION_VPC_ID"
-cost_center                       = "REPLACE_WITH_APPROVED_COST_CENTER"
-argocd_acm_certificate_arn        = "REPLACE_WITH_PRODUCTION_ACM_CERTIFICATE_ARN"
-argocd_domain                     = "REPLACE_WITH_PRODUCTION_PRIVATE_ARGOCD_HOSTNAME"
-aws_load_balancer_controller_chart_version = "REPLACE_WITH_APPROVED_CHART_VERSION"
+# Existing production infrastructure and required FinOps value.
+aws_region   = "REPLACE_WITH_PRODUCTION_AWS_REGION"
+cluster_name = "REPLACE_WITH_PRODUCTION_EKS_CLUSTER_NAME"
+vpc_id       = "REPLACE_WITH_PRODUCTION_VPC_ID"
+cost_center  = "REPLACE_WITH_APPROVED_COST_CENTER"
 
-enable_argocd                = true
-enable_keda                  = true
-enable_cert_manager          = true
-enable_route53_dns01         = true
-enable_monitoring            = true
-enable_frontend              = true
+# Environment identity and resource ownership.
+environment   = "production"
+owner         = "qzee-dev"
+project_name  = "fintech-platform"
+app_namespace = "production"
+
+# Add-ons. Argo CD and Envoy ingress currently require the AWS Load Balancer
+# Controller and Pod Identity Agent; the platform enables these dependencies.
+enable_pod_identity_agent                  = false
+enable_aws_load_balancer_controller        = false
+aws_load_balancer_controller_chart_version = "1.13.4"
+enable_keda                                = true
+keda_chart_version                         = "2.21.0"
+enable_cert_manager                        = true
+cert_manager_chart_version                 = "1.17.2"
+enable_route53_dns01                       = true
+route53_zone_id                            = "REPLACE_WITH_PRODUCTION_ROUTE53_ZONE_ID"
+acme_email                                 = "REPLACE_WITH_OPERATIONS_EMAIL"
+# This defaults to Let's Encrypt staging for safe initial testing. Change to
+# the approved production ACME directory before expecting trusted certificates.
+acme_server                         = "https://acme-staging-v02.api.letsencrypt.org/directory"
+enable_monitoring                   = true
+kube_prometheus_stack_chart_version = "93.1.1"
+enable_efk                          = false
+eck_operator_chart_version          = "3.5.0"
+elasticsearch_version               = "9.5.6"
+elasticsearch_node_count            = 3
+elasticsearch_storage_size          = "100Gi"
+elasticsearch_storage_class         = ""
+elasticsearch_cpu                   = "2"
+elasticsearch_memory                = "4Gi"
+kibana_cpu                          = "500m"
+kibana_memory                       = "1Gi"
+fluent_bit_chart_version            = "0.58.3"
+log_retention_days                  = 14
+enable_frontend                     = true
+frontend_image                      = "nginx:1.29.2-alpine"
+frontend_replicas                   = 2
+
+# Production application ingress: Envoy requests an AWS-managed NLB.
 ingress_controller           = "envoy"
-app_namespace                = "production"
 ingress_domain_suffix        = "REPLACE_WITH_PRODUCTION_DNS_SUFFIX"
+kibana_hostname              = "REPLACE_WITH_PRODUCTION_KIBANA_HOSTNAME"
 ingress_load_balancer_scheme = "internal"
-route53_zone_id              = "REPLACE_WITH_PUBLIC_ROUTE53_ZONE_ID"
-acme_email                   = "REPLACE_WITH_OPERATIONS_EMAIL"
-acme_server                  = "https://acme-staging-v02.api.letsencrypt.org/directory"
+ingress_alb_certificate_arn  = ""
+
+# Production Argo CD endpoint.
+enable_argocd              = true
+argocd_domain              = "REPLACE_WITH_PRODUCTION_PRIVATE_ARGOCD_HOSTNAME"
+argocd_acm_certificate_arn = "REPLACE_WITH_PRODUCTION_ARGOCD_ACM_CERTIFICATE_ARN"
+
+# Do not store this secret in tfvars. Provide it through a protected secret
+# source as TF_VAR_grafana_admin_password (at least 16 characters).

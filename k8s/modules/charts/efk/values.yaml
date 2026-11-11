@@ -1,0 +1,12 @@
+elasticsearch:
+  version: 9.5.6
+  nodeCount: 1
+  storageSize: 20Gi
+  storageClass: ""
+  cpu: "2"
+  memory: 4Gi
+  retentionDays: 14
+kibana:
+  version: 9.5.6
+  cpu: 500m
+  memory: 1Gi

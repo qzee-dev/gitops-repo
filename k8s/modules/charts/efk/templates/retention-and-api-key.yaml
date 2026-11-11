@@ -1,0 +1,123 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: efk-api-key
+  namespace: logging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: efk-api-key
+  namespace: logging
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: efk-api-key
+  namespace: logging
+subjects:
+  - kind: ServiceAccount
+    name: efk-api-key
+    namespace: logging
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: efk-api-key
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: efk-retention-and-api-key
+  namespace: logging
+data:
+  configure.sh: |
+    #!/bin/sh
+    set -eu
+
+    es_url="https://elasticsearch-es-http.logging.svc:9200"
+    es_auth="elastic:${ES_PASSWORD}"
+    es_ca="/elasticsearch-ca/ca.crt"
+    k8s_api="https://kubernetes.default.svc"
+    k8s_ca="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+    k8s_token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+
+    until curl --silent --show-error --fail --cacert "$es_ca" --user "$es_auth" "$es_url/" >/dev/null; do
+      sleep 10
+    done
+
+    curl --silent --show-error --fail --cacert "$es_ca" --user "$es_auth" \
+      --request PUT --header 'Content-Type: application/json' \
+      --data '{"policy":{"phases":{"hot":{"actions":{}},"delete":{"min_age":"{{ .Values.elasticsearch.retentionDays }}d","actions":{"delete":{}}}}}}' \
+      "$es_url/_ilm/policy/container-logs-retention"
+
+    curl --silent --show-error --fail --cacert "$es_ca" --user "$es_auth" \
+      --request PUT --header 'Content-Type: application/json' \
+      --data '{"index_patterns":["logs-*"],"priority":200,"template":{"settings":{"index.lifecycle.name":"container-logs-retention"}}}' \
+      "$es_url/_index_template/container-logs"
+
+    secret_url="$k8s_api/api/v1/namespaces/logging/secrets/efk-fluent-bit-api-key"
+    secret_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+      --cacert "$k8s_ca" --header "Authorization: Bearer $k8s_token" "$secret_url")"
+    case "$secret_status" in
+      200) exit 0 ;;
+      404) ;;
+      *) echo "Unexpected HTTP status reading Fluent Bit API key secret: $secret_status" >&2; exit 1 ;;
+    esac
+
+    api_key_response="$(curl --silent --show-error --fail --cacert "$es_ca" --user "$es_auth" \
+      --request POST --header 'Content-Type: application/json' \
+      --data '{"name":"fluent-bit","role_descriptors":{"fluent-bit-writer":{"cluster":[],"indices":[{"names":["logs-*"],"privileges":["create_index","create_doc","write"]}]}}}' \
+      "$es_url/_security/api_key")"
+    api_key="$(printf '%s' "$api_key_response" | sed -n 's/.*"encoded":"\([^"]*\)".*/\1/p')"
+    test -n "$api_key"
+
+    secret_body="$(printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"efk-fluent-bit-api-key","namespace":"logging"},"type":"Opaque","data":{"api_key":"%s"}}' "$api_key")"
+    curl --silent --show-error --fail --cacert "$k8s_ca" \
+      --header "Authorization: Bearer $k8s_token" \
+      --header 'Content-Type: application/json' \
+      --request PUT --data "$secret_body" "$secret_url"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: efk-retention-and-api-key
+  namespace: logging
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 12
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: efk-api-key
+      containers:
+        - name: configure
+          image: curlimages/curl:8.15.0
+          command: ["/bin/sh", "/scripts/configure.sh"]
+          env:
+            - name: ES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: elasticsearch-es-elastic-user
+                  key: elastic
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+            - name: elasticsearch-ca
+              mountPath: /elasticsearch-ca
+              readOnly: true
+      volumes:
+        - name: script
+          configMap:
+            name: efk-retention-and-api-key
+            defaultMode: 0555
+        - name: elasticsearch-ca
+          secret:
+            secretName: elasticsearch-es-http-certs-public

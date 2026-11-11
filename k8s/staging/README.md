@@ -48,6 +48,18 @@ required certificate and DNS values. Review the plan before applying, and do
 not let this root replace add-ons already owned by another stack. See the
 [runbook](../../RUNBOOK.md) for backend migration and deployment flow.
 
+### EFK logging rollout
+
+EFK is configured but disabled in the staging tfvars example. Keep
+`enable_efk = false` until dev's isolated stack has been validated and
+staging capacity, access, cost, retention, and snapshot/restore expectations
+are approved. When enabled, staging uses three Elasticsearch nodes with
+50Gi storage each, 2 CPU and 4Gi memory per node, Kibana at 500m/1Gi, and a
+Fluent Bit DaemonSet. Set `kibana_hostname` beneath
+`ingress_domain_suffix`, add its DNS record, and ensure the ACM certificate
+covers it. The default retention is 14 days. No snapshots are configured by
+this Terraform stack. Follow the [EFK operations runbook](../../RUNBOOK.md#efk-logging-operations).
+
 ## Existing shared NLB
 
 **Current status:** the default ALB option creates AWS-LBC-managed ALB

@@ -50,6 +50,19 @@ applying. Keep production credentials and Grafana secrets in a protected
 secret source. See the [runbook](../../RUNBOOK.md) for backend migration and
 promotion procedures.
 
+### EFK logging rollout
+
+EFK is configured but disabled in the production tfvars example. Do not enable
+it until dev and staging are validated, production capacity and cost are
+approved, and durable Elasticsearch snapshots plus a tested restore procedure
+are in place. When enabled, production uses three Elasticsearch nodes with
+100Gi storage each, 2 CPU and 4Gi memory per node, Kibana at 500m/1Gi, and a
+Fluent Bit DaemonSet. Set `kibana_hostname` beneath
+`ingress_domain_suffix`, create its DNS record, and ensure its wildcard or
+explicit TLS certificate covers that name. The default retention is 14 days.
+The Terraform stack does not configure snapshots or backups. Follow the
+[EFK operations runbook](../../RUNBOOK.md#efk-logging-operations).
+
 ## Existing shared NLB
 
 **Current status:** the default Envoy module requests its own NLB through a
