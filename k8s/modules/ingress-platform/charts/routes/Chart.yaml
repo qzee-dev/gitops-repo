@@ -1,0 +1,5 @@
+apiVersion: v2
+name: sample-routes
+description: DNS-01 certificates and sample routes for Envoy Gateway, ingress-nginx, or AWS ALB
+type: application
+version: 0.1.0

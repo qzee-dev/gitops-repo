@@ -1,0 +1,6 @@
+apiVersion: v2
+name: sample-frontend
+description: Minimal configurable frontend service for ingress platform validation
+type: application
+version: 0.1.0
+appVersion: "1.0"

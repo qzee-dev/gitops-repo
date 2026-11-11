@@ -1,0 +1,84 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: monitoring-wildcard
+  namespace: monitoring
+spec:
+  secretName: monitoring-wildcard-tls
+  issuerRef:
+    name: letsencrypt-dns01
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.dev.example.com"
+    - "dev.example.com"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring
+  namespace: monitoring
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - grafana.dev.example.com
+        - prometheus.dev.example.com
+      secretName: monitoring-wildcard-tls
+  rules:
+    - host: grafana.dev.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 80
+    - host: prometheus.dev.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus-operated
+                port:
+                  number: 9090
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: frontend-wildcard
+  namespace: dev
+spec:
+  secretName: frontend-wildcard-tls
+  issuerRef:
+    name: letsencrypt-dns01
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.dev.example.com"
+    - "dev.example.com"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - app.dev.example.com
+      secretName: frontend-wildcard-tls
+  rules:
+    - host: app.dev.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

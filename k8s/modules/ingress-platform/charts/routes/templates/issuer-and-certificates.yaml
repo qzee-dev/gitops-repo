@@ -1,0 +1,65 @@
+{{- if and (ne .Values.controller "alb") .Values.issuer.create }}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.issuer.name }}
+spec:
+  acme:
+    server: {{ .Values.issuer.server | quote }}
+    email: {{ .Values.issuer.email | quote }}
+    privateKeySecretRef:
+      name: {{ .Values.issuer.name }}-account
+    solvers:
+      - selector:
+          dnsZones:
+            - {{ .Values.domainSuffix | quote }}
+        dns01:
+          route53:
+            region: {{ .Values.issuer.region | quote }}
+            hostedZoneID: {{ .Values.issuer.hostedZoneID | quote }}
+{{- end }}
+{{- if eq .Values.controller "envoy" }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: edge-wildcard
+  namespace: edge-gateway
+spec:
+  secretName: edge-wildcard-tls
+  issuerRef:
+    name: {{ .Values.issuer.name }}
+    kind: ClusterIssuer
+  dnsNames:
+    - {{ printf "*.%s" .Values.domainSuffix | quote }}
+    - {{ .Values.domainSuffix | quote }}
+{{- else if eq .Values.controller "nginx" }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: monitoring-wildcard
+  namespace: monitoring
+spec:
+  secretName: monitoring-wildcard-tls
+  issuerRef:
+    name: {{ .Values.issuer.name }}
+    kind: ClusterIssuer
+  dnsNames:
+    - {{ printf "*.%s" .Values.domainSuffix | quote }}
+    - {{ .Values.domainSuffix | quote }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: frontend-wildcard
+  namespace: {{ .Values.appNamespace }}
+spec:
+  secretName: frontend-wildcard-tls
+  issuerRef:
+    name: {{ .Values.issuer.name }}
+    kind: ClusterIssuer
+  dnsNames:
+    - {{ printf "*.%s" .Values.domainSuffix | quote }}
+    - {{ .Values.domainSuffix | quote }}
+{{- end }}

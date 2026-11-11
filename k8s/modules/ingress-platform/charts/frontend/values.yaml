@@ -1,0 +1,2 @@
+image: nginx:1.29.2-alpine
+replicas: 2

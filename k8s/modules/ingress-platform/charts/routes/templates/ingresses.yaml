@@ -1,0 +1,124 @@
+{{- if or (eq .Values.controller "nginx") (eq .Values.controller "f5-nginx") }}
+{{- $className := "nginx" -}}
+{{- if eq .Values.controller "f5-nginx" -}}
+{{- $className = "f5-nginx" -}}
+{{- end -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-{{ .Values.controller }}
+  namespace: {{ .Values.appNamespace }}
+spec:
+  ingressClassName: {{ $className }}
+  tls:
+    - hosts:
+        - {{ .Values.hostnames.frontend | quote }}
+      secretName: frontend-{{ .Values.controller }}-tls
+  rules:
+    - host: {{ .Values.hostnames.frontend | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-{{ .Values.controller }}
+  namespace: monitoring
+spec:
+  ingressClassName: {{ $className }}
+  tls:
+    - hosts:
+        - {{ .Values.hostnames.grafana | quote }}
+        - {{ .Values.hostnames.prometheus | quote }}
+      secretName: monitoring-{{ .Values.controller }}-tls
+  rules:
+    - host: {{ .Values.hostnames.grafana | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kube-prometheus-stack-grafana
+                port:
+                  number: 80
+    - host: {{ .Values.hostnames.prometheus | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kube-prometheus-stack-prometheus
+                port:
+                  number: 9090
+{{- else if eq .Values.controller "alb" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-{{ .Values.controller }}
+  namespace: {{ .Values.appNamespace }}
+  annotations:
+    alb.ingress.kubernetes.io/group.name: {{ .Values.alb.groupName | quote }}
+    alb.ingress.kubernetes.io/scheme: {{ .Values.alb.scheme | quote }}
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.alb.certificateArn | quote }}
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+spec:
+  ingressClassName: alb
+  rules:
+    - host: {{ .Values.hostnames.frontend | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-{{ .Values.controller }}
+  namespace: monitoring
+  annotations:
+    alb.ingress.kubernetes.io/group.name: {{ .Values.alb.groupName | quote }}
+    alb.ingress.kubernetes.io/scheme: {{ .Values.alb.scheme | quote }}
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.alb.certificateArn | quote }}
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+spec:
+  ingressClassName: alb
+  rules:
+    - host: {{ .Values.hostnames.grafana | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kube-prometheus-stack-grafana
+                port:
+                  number: 80
+    - host: {{ .Values.hostnames.prometheus | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kube-prometheus-stack-prometheus
+                port:
+                  number: 9090
+{{- end }}

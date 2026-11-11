@@ -1,0 +1,17 @@
+aws_region                                 = "REPLACE_WITH_STAGING_AWS_REGION"
+cluster_name                               = "REPLACE_WITH_STAGING_EKS_CLUSTER_NAME"
+vpc_id                                     = "REPLACE_WITH_STAGING_VPC_ID"
+acm_certificate_arn                        = "REPLACE_WITH_ACM_CERTIFICATE_ARN"
+argocd_domain                              = "REPLACE_WITH_PRIVATE_ARGOCD_HOSTNAME"
+aws_load_balancer_controller_chart_version = "REPLACE_WITH_APPROVED_CHART_VERSION"
+cost_center                                = "REPLACE_WITH_APPROVED_COST_CENTER"
+
+# Select exactly one application ingress implementation for staging.
+ingress_controller            = "alb"
+ingress_app_namespace          = "staging"
+ingress_domain_suffix          = "REPLACE_WITH_STAGING_DNS_SUFFIX"
+ingress_route53_zone_id        = "REPLACE_WITH_PUBLIC_ROUTE53_ZONE_ID"
+ingress_acme_email             = "REPLACE_WITH_OPERATIONS_EMAIL"
+ingress_acme_server            = "https://acme-staging-v02.api.letsencrypt.org/directory"
+ingress_alb_certificate_arn    = ""
+ingress_alb_scheme             = "internal"

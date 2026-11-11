@@ -1,0 +1,19 @@
+controller: envoy
+environment: dev
+appNamespace: dev
+domainSuffix: example.invalid
+hostnames:
+  frontend: app.example.invalid
+  grafana: grafana.example.invalid
+  prometheus: prometheus.example.invalid
+issuer:
+  create: true
+  name: letsencrypt-dns01
+  server: https://acme-staging-v02.api.letsencrypt.org/directory
+  email: operations@example.invalid
+  region: us-east-1
+  hostedZoneID: ""
+alb:
+  certificateArn: ""
+  scheme: internal
+  groupName: dev-sample-endpoints
