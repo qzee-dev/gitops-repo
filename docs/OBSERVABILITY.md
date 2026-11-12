@@ -20,6 +20,27 @@ The Collector does not export application logs. Application logs use one path on
 
 The Collector's OTLP endpoints and Prometheus exporter are cluster-internal. The Prometheus configuration scrapes the Collector at `opentelemetry-collector.monitoring.svc:8889` every 30 seconds. Services send metrics through OTLP; they do not need a separate Prometheus scrape port. The Collector sends traces to Tempo at `tempo.monitoring.svc.cluster.local:4317`.
 
+## Dashboard lifecycle: from app metrics to Grafana
+
+```mermaid
+flowchart LR
+    Service[Application service] -->|instrumented metrics + traces| SDK[OpenTelemetry SDK]
+    SDK -->|OTLP over internal collector endpoint| Collector[OpenTelemetry Collector]
+    Collector -->|metrics| Prom[Prometheus]
+    Collector -->|traces| Tempo[Tempo]
+    Service -->|JSON logs to stdout/stderr| Fluent[Fluent Bit]
+    Fluent -->|ship logs| ES[Elasticsearch]
+
+    Prom -->|PromQL queries| Grafana[Grafana dashboards]
+    Tempo -->|trace queries| Grafana
+    ES -->|log search| Kibana[Kibana]
+
+    Grafana --> Dashboard[Fintech Platform Overview\nrequest rate / errors / latency / transactions / payments / fraud / notifications / DLQ / web]
+    Dashboard --> Ops[Operations and support]
+```
+
+This is the dashboard lifecycle for this repo: application services emit telemetry, the Collector forwards it to Prometheus and Tempo, and Grafana renders the dashboard panels used by operations.
+
 ## Runtime Configuration
 
 Set these values per service and environment:

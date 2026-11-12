@@ -332,6 +332,8 @@ defaults and the Tempo datasource; it does not define application-specific
 dashboards, alert rules, or Alertmanager notification receivers. Configure
 and test notification routes before relying on alerts.
 
+For dashboard implementation details, see [docs/GRAFANA_DASHBOARD_RUNBOOK.md](docs/GRAFANA_DASHBOARD_RUNBOOK.md). It contains the exact Grafana workflow, validation steps, and PromQL examples used for the Fintech Platform Overview dashboard.
+
 ### Enable and deploy
 
 1. In the intended environment tfvars, set `enable_monitoring = true`. Check

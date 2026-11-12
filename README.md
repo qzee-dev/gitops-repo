@@ -70,6 +70,18 @@ flowchart LR
     Prom --> Grafana[Grafana]
   Grafana -->|Tempo datasource| Tempo
     ES --> Kibana[Kibana]
+  Grafana -->|dashboard queries| Panel[Fintech Platform Overview]
+```
+
+The dashboard flow is:
+
+```mermaid
+flowchart LR
+    Services[Application services] -->|emit metrics| Collector[OpenTelemetry Collector]
+    Collector -->|scrapes metrics| Prom[Prometheus]
+    Prom -->|queries| Grafana[Grafana dashboards]
+    Grafana --> Panels[Service health / transactions / payments / fraud / notifications / DLQ / web]
+    Panels --> Ops[Operations and support]
 ```
 
 The platform repo owns:
@@ -172,6 +184,16 @@ deployment, access, and verification steps.
   safe state/plan procedures.
 - [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md): platform-level telemetry
   design, PromQL guidance, and service coverage status.
+- [`docs/GRAFANA_DASHBOARD_APPROACHES.md`](docs/GRAFANA_DASHBOARD_APPROACHES.md):
+  manual versus dashboard-as-code approaches for Grafana and PromQL planning.
+- [`docs/GRAFANA_DASHBOARD_RUNBOOK.md`](docs/GRAFANA_DASHBOARD_RUNBOOK.md):
+  step-by-step implementation guide for the Fintech Platform Overview dashboard.
+- [`docs/FINTECH_PLATFORM_OVERVIEW_DASHBOARD.json`](docs/FINTECH_PLATFORM_OVERVIEW_DASHBOARD.json):
+  the ready-to-import Grafana dashboard JSON.
+- [`docs/IMPORT_GRAFANA_DASHBOARD.md`](docs/IMPORT_GRAFANA_DASHBOARD.md):
+  import instructions for the dashboard JSON.
+- [`docs/GO_LIVE_CHECKLIST.md`](docs/GO_LIVE_CHECKLIST.md):
+  final validation checklist for getting the monitoring stack and dashboard live.
 
 ## State and ownership
 
